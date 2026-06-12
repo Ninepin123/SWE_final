@@ -1,0 +1,30 @@
+# ===== 前端 (frontend/) =====
+node_modules/
+frontend/dist/
+*.local
+
+# ===== 後端 (backend/) =====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# 本機環境設定（請勿提交，使用 .env.example 複製產生）
+backend/.env
+.env
+
+# ===== 可攜版 MySQL（start.bat 自動下載；程式與資料都不入版控） =====
+tools/
+
+# ===== IDE =====
+.idea/
+*.iml
+.vscode/
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== Logs =====
+*.log

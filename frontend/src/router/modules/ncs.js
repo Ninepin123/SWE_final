@@ -1,0 +1,11 @@
+// NCS 通知與溝通 — 路由（負責人：填上姓名）
+// 此檔由 router/index.js 自動載入，只需要 export default 路由陣列。
+// 頁面元件放在 src/views/ncs/，命名用 PascalCase + View 結尾。
+export default [
+  // TODO(NCS): 例如
+  // {
+  //   path: '/ncs/xxx',
+  //   name: 'ncs-xxx',
+  //   component: () => import('@/views/ncs/XxxView.vue'),
+  // },
+]
