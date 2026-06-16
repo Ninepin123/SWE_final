@@ -1,25 +1,38 @@
 """SAS 學生申請 — API 路由
-負責人：（填上負責組員姓名）
 需求書：Chapter 6，功能需求 6.2.1–6.2.7
+v1 範圍：學生線上申請獎學金、查詢自己的申請進度。
+（可申請項目的列表沿用 SMS 的 /api/sms/scholarships?only_open=true。）
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.modules.aas.models import User
+from app.modules.aas.security import require_roles
+from app.modules.sas import service
+from app.modules.sas.schemas import ApplicationCreate, ApplicationOut
 
 router = APIRouter(prefix="/api/sas", tags=["SAS 學生申請"])
 
-# TODO(SAS):
-#   GET    /api/sas/profile                         查看個人資料（6.2.1）
-#   PUT    /api/sas/profile                         修改個人資料（學號等核心欄位不可改）
-#   GET    /api/sas/scholarships/available          可申請獎學金查詢與篩選（NUKSAMS013，向 SMS 取資料）
-#   POST   /api/sas/applications                    線上申請（NUKSAMS011）
-#   GET    /api/sas/applications                    我的申請進度列表（NUKSAMS014）
-#   POST   /api/sas/applications/{app_id}/documents 上傳文件（限制格式與大小, 6.2.4）
-#   POST   /api/sas/applications/{app_id}/supplements 補件上傳（6.2.6）
-#
-# 注意：申請截止後鎖定（NUKSAMS008）—— 在 service 層檢查獎學金截止時間，
-#       截止後一律拒絕修改與上傳。
+
+@router.post(
+    "/applications",
+    response_model=ApplicationOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def apply(
+    body: ApplicationCreate,
+    db: Session = Depends(get_db),
+    student: User = Depends(require_roles("STUDENT")),
+):
+    """學生線上申請獎學金（NUKSAMS012）。"""
+    return service.apply(db, student, body)
 
 
-@router.get("/ping")
-def ping():
-    """骨架測試用端點，開發開始後可移除。"""
-    return {"module": "sas", "status": "ok"}
+@router.get("/applications/me", response_model=list[ApplicationOut])
+def my_applications(
+    db: Session = Depends(get_db),
+    student: User = Depends(require_roles("STUDENT")),
+):
+    """查詢自己所有申請案的進度（NUKSAMS014）。"""
+    return service.list_my_applications(db, student)

@@ -1,5 +1,93 @@
-"""SMS — 商業邏輯層。
+"""SMS — 商業邏輯層（獎學金資料管理，需求書 5.2）。"""
+from datetime import datetime
 
-router.py 只負責收請求/回應，權限檢查與商業邏輯寫在這裡，
-方便單元測試（backend/tests/）。
-"""
+from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.modules.aas.models import Unit, User
+from app.modules.sms.models import Scholarship
+from app.modules.sms.schemas import ScholarshipCreate
+
+VALID_CATEGORIES = {"SCHOOL", "GOVERNMENT", "PRIVATE", "LOW_INCOME", "MERIT", "OTHER"}
+
+
+def _naive(dt: datetime | None) -> datetime | None:
+    if dt is not None and dt.tzinfo is not None:
+        return dt.replace(tzinfo=None)
+    return dt
+
+
+def _to_out(s: Scholarship, unit_name: str | None) -> dict:
+    return {
+        "scholarship_id": s.scholarship_id,
+        "name": s.name,
+        "year": s.year,
+        "amount": s.amount,
+        "quota": s.quota,
+        "min_gpa": float(s.min_gpa) if s.min_gpa is not None else None,
+        "department_limit": s.department_limit,
+        "category": s.category,
+        "description": s.description,
+        "deadline": s.deadline,
+        "status": s.status,
+        "unit_id": s.unit_id,
+        "unit_name": unit_name,
+    }
+
+
+def list_scholarships(db: Session, only_open: bool = False) -> list[dict]:
+    rows = db.execute(
+        select(Scholarship, Unit.name)
+        .join(Unit, Scholarship.unit_id == Unit.unit_id)
+        .order_by(Scholarship.created_at.desc())
+    ).all()
+    now = datetime.now()
+    out: list[dict] = []
+    for s, unit_name in rows:
+        if only_open:
+            if s.status != "OPEN":
+                continue
+            dl = _naive(s.deadline)
+            if dl is not None and dl < now:
+                continue
+        out.append(_to_out(s, unit_name))
+    return out
+
+
+def get_scholarship(db: Session, scholarship_id: int) -> dict:
+    row = db.execute(
+        select(Scholarship, Unit.name)
+        .join(Unit, Scholarship.unit_id == Unit.unit_id)
+        .where(Scholarship.scholarship_id == scholarship_id)
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="找不到獎學金")
+    s, unit_name = row
+    return _to_out(s, unit_name)
+
+
+def create_scholarship(db: Session, data: ScholarshipCreate, current: User) -> dict:
+    if data.category not in VALID_CATEGORIES:
+        raise HTTPException(status_code=400, detail="分類不存在")
+    if current.unit_id is None:
+        raise HTTPException(status_code=400, detail="此帳號未綁定單位，無法建立獎學金")
+    s = Scholarship(
+        unit_id=current.unit_id,
+        name=data.name,
+        year=data.year,
+        amount=data.amount,
+        quota=data.quota,
+        min_gpa=data.min_gpa,
+        department_limit=data.department_limit,
+        category=data.category,
+        description=data.description,
+        deadline=_naive(data.deadline),
+        status="OPEN",
+        created_by=current.user_id,
+    )
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    unit = db.get(Unit, s.unit_id)
+    return _to_out(s, unit.name if unit else None)
