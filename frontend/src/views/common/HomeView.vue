@@ -1,69 +1,67 @@
 <script setup>
-// 系統首頁 / 個人主控台。
+// 系統首頁 / 個人主控台（依角色顯示功能入口）。
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
-const router = useRouter()
 const auth = useAuthStore()
 
 const ROLE_LABEL = {
   STUDENT: '學生', TEACHER: '老師', SPONSOR: '獎助單位', REVIEWER: '審查人員', ADMIN: '系統管理員',
 }
 
-const links = computed(() => {
+const tiles = computed(() => {
   const r = auth.role
-  const all = []
+  const list = []
   if (r === 'STUDENT') {
-    all.push({ to: '/sas/apply', text: '申請獎學金' })
-    all.push({ to: '/sas/applications', text: '我的申請進度' })
+    list.push({ to: '/sas/apply', text: '瀏覽 / 申請獎學金', desc: '查看開放中的獎學金並填寫申請表' })
+    list.push({ to: '/sas/applications', text: '我的申請進度', desc: '追蹤審查狀態、邀請老師推薦' })
+    list.push({ to: '/sas/profile', text: '個人資料', desc: '維護聯絡方式與緊急聯絡人' })
   }
-  if (r === 'SPONSOR' || r === 'ADMIN') all.push({ to: '/sms/scholarships', text: '獎學金管理' })
-  if (r === 'REVIEWER' || r === 'ADMIN') all.push({ to: '/ras/applications', text: '審查申請案' })
-  if (r === 'ADMIN') all.push({ to: '/aas/users', text: '帳號管理' })
-  // 所有登入者都能瀏覽獎學金列表
-  if (r && r !== 'SPONSOR' && r !== 'ADMIN') all.push({ to: '/sms/scholarships', text: '瀏覽獎學金' })
-  return all
+  if (r === 'TEACHER') {
+    list.push({ to: '/trs/recommendations', text: '推薦邀請', desc: '撰寫與送出學生推薦信' })
+  }
+  if (r === 'SPONSOR') {
+    list.push({ to: '/sms/scholarships', text: '獎學金管理', desc: '張貼、修改、關閉本單位獎學金' })
+  }
+  if (r === 'REVIEWER') {
+    list.push({ to: '/ras/applications', text: '審查申請案', desc: '檢視申請與推薦信、做出審查決定' })
+  }
+  if (r === 'ADMIN') {
+    list.push({ to: '/sms/scholarships', text: '獎學金管理', desc: '管理所有單位的獎學金' })
+    list.push({ to: '/aas/users', text: '帳號管理', desc: '新增 / 修改 / 刪除使用者帳號' })
+    list.push({ to: '/aas/audit-logs', text: '稽核紀錄', desc: '檢視系統重要操作紀錄' })
+  }
+  list.push({ to: '/ncs/announcements', text: '公告', desc: '查看系統公告' })
+  list.push({ to: '/ncs/notifications', text: '我的通知', desc: '申請 / 審查 / 推薦相關通知' })
+  return list
 })
-
-async function logout() {
-  await auth.logout()
-  router.push('/login')
-}
 </script>
 
 <template>
   <main class="home">
     <h1>NUKSAMS 高雄大學獎(助)學金申請與管理系統</h1>
+    <p class="hello">你好，{{ auth.user?.name }}（{{ ROLE_LABEL[auth.role] || auth.role }}）</p>
 
-    <template v-if="auth.isLoggedIn">
-      <p class="hello">
-        你好，{{ auth.user?.name }}（{{ ROLE_LABEL[auth.role] || auth.role }}）
-        <button class="link" @click="logout">登出</button>
-      </p>
-      <div class="grid">
-        <RouterLink v-for="l in links" :key="l.to" :to="l.to" class="tile">{{ l.text }}</RouterLink>
-      </div>
-    </template>
+    <div class="grid">
+      <RouterLink v-for="t in tiles" :key="t.to" :to="t.to" class="tile">
+        <span class="tile-title">{{ t.text }}</span>
+        <span class="tile-desc">{{ t.desc }}</span>
+      </RouterLink>
+    </div>
 
-    <template v-else>
-      <p>請先登入以使用系統。</p>
-      <RouterLink to="/login" class="tile solo">前往登入</RouterLink>
-    </template>
-
-    <p class="note">這是 v1 初版（核心流程）。完整功能與開發方式見 <code>docs/V1_SLICE.md</code> 與 <code>docs/DEVELOPMENT.md</code>。</p>
+    <p class="note">開發方式與分工見 <code>docs/DEVELOPMENT.md</code>；版本內容見 <code>docs/V1_SLICE.md</code>。</p>
   </main>
 </template>
 
 <style scoped>
-.home { max-width: 760px; margin: 6vh auto; padding: 0 16px; font-family: system-ui, sans-serif; }
-h1 { font-size: 22px; }
-.hello { color: #333; display: flex; align-items: center; gap: 12px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
-.tile { display: block; padding: 18px; border: 1px solid #e3e3e3; border-radius: 12px; text-decoration: none; color: #2b6cb0; font-weight: 600; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
-.tile:hover { border-color: #2b6cb0; }
-.solo { max-width: 220px; }
-.link { background: none; border: none; color: #2b6cb0; cursor: pointer; text-decoration: underline; font-size: 14px; }
-.note { color: #888; font-size: 13px; margin-top: 24px; }
-code { background: #eef; padding: 1px 5px; border-radius: 4px; }
+.home { max-width: 1000px; margin: 32px auto; padding: 0 16px; }
+h1 { font-size: 22px; margin-bottom: 4px; }
+.hello { color: #4a5568; margin-top: 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin: 18px 0; }
+.tile { display: flex; flex-direction: column; gap: 6px; padding: 18px; border: 1px solid #e2e8f0; border-radius: 14px; text-decoration: none; background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, .04); transition: border-color .15s, transform .15s; }
+.tile:hover { border-color: #2b6cb0; transform: translateY(-2px); }
+.tile-title { color: #2b6cb0; font-weight: 700; font-size: 16px; }
+.tile-desc { color: #718096; font-size: 13px; }
+.note { color: #a0aec0; font-size: 13px; margin-top: 24px; }
+code { background: #edf2f7; padding: 1px 5px; border-radius: 4px; color: #2d3748; }
 </style>

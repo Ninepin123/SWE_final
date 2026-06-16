@@ -1,22 +1,49 @@
 """TRS 教師推薦 — API 路由
-負責人：（填上負責組員姓名）
-需求書：Chapter 7，功能需求 7.2.1–7.2.6
+需求書：Chapter 7。範圍：學生邀請老師推薦、老師撰寫/送出推薦信、學生查看推薦狀態。
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.modules.aas.models import User
+from app.modules.aas.security import require_roles
+from app.modules.trs import service
+from app.modules.trs.schemas import (
+    RecommendationLetterUpdate,
+    RecommendationRequestCreate,
+    RecommendationStudentOut,
+    RecommendationTeacherOut,
+)
 
 router = APIRouter(prefix="/api/trs", tags=["TRS 教師推薦"])
 
-# TODO(TRS):
-#   GET    /api/trs/requests                        推薦案件列表（僅自己負責的, NUKSAMS004）
-#   GET    /api/trs/requests/{request_id}/student   學生完整資料檢視（NUKSAMS001, 7.2.2）
-#   PUT    /api/trs/requests/{request_id}/letter    撰寫/暫存推薦信（草稿, 7.2.4）
-#   POST   /api/trs/requests/{request_id}/letter/submit  提交推薦信
-#   GET    /api/trs/requests/{request_id}/progress  案件進度查詢（7.2.6）
-#
-# 注意：推薦信內容僅撰寫老師與審查人員可見，學生只能看到是否已提交（7.2.5）。
+
+@router.post("/recommendations", response_model=RecommendationStudentOut, status_code=status.HTTP_201_CREATED)
+def request_recommendation(
+    body: RecommendationRequestCreate, db: Session = Depends(get_db), student: User = Depends(require_roles("STUDENT"))
+):
+    """學生為自己的申請邀請一位老師撰寫推薦信。"""
+    return service.request_recommendation(db, student, body)
 
 
-@router.get("/ping")
-def ping():
-    """骨架測試用端點，開發開始後可移除。"""
-    return {"module": "trs", "status": "ok"}
+@router.get("/recommendations/student", response_model=list[RecommendationStudentOut])
+def my_recommendations(db: Session = Depends(get_db), student: User = Depends(require_roles("STUDENT"))):
+    """學生查看自己各申請的推薦狀態（看不到內容）。"""
+    return service.list_for_student(db, student)
+
+
+@router.get("/recommendations/teacher", response_model=list[RecommendationTeacherOut])
+def teacher_recommendations(db: Session = Depends(get_db), teacher: User = Depends(require_roles("TEACHER"))):
+    """老師查看被指派的推薦邀請（含已寫內容）。"""
+    return service.list_for_teacher(db, teacher)
+
+
+@router.put("/recommendations/{rec_id}", response_model=RecommendationTeacherOut)
+def save_letter(
+    rec_id: int,
+    body: RecommendationLetterUpdate,
+    db: Session = Depends(get_db),
+    teacher: User = Depends(require_roles("TEACHER")),
+):
+    """老師存草稿或送出推薦信。"""
+    return service.save_letter(db, teacher, rec_id, body)

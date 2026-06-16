@@ -14,10 +14,23 @@ class Application(Base):
     application_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"), nullable=False)
     scholarship_id: Mapped[int] = mapped_column(ForeignKey("scholarships.scholarship_id"), nullable=False)
-    # 狀態：審核中 / 需補件 / 已通過 / 未通過（NUKSAMS014）
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="UNDER_REVIEW")
-    statement: Mapped[str | None] = mapped_column(Text)  # 申請理由/自述（v1 以文字代替文件上傳）
+    # 申請表欄位
+    statement: Mapped[str | None] = mapped_column(Text)            # 申請理由 / 自述
+    contact_phone: Mapped[str | None] = mapped_column(String(30))  # 聯絡電話
+    address: Mapped[str | None] = mapped_column(String(255))       # 通訊地址
+    household_status: Mapped[str | None] = mapped_column(Text)     # 家庭狀況
+    academic_note: Mapped[str | None] = mapped_column(Text)        # 在學成績 / 排名說明
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now()
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class StudentProfile(Base):
+    __tablename__ = "student_profiles"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"), primary_key=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(30))
+    address: Mapped[str | None] = mapped_column(String(255))
+    emergency_contact_name: Mapped[str | None] = mapped_column(String(100))
+    emergency_contact_phone: Mapped[str | None] = mapped_column(String(30))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

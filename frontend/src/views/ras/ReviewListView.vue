@@ -1,107 +1,139 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+// RAS 審查申請案（僅審查人員 REVIEWER）。
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { listReviewApplications, decide as decideApi } from '@/api/ras'
+import { listReviewApplications, decide } from '@/api/ras'
 
 const router = useRouter()
 const auth = useAuthStore()
 
-const items = ref([])
-const error = ref('')
-const comments = reactive({})  // application_id -> 審查意見
-const busy = ref(null)
+const STATUS_LABEL = { UNDER_REVIEW: '審核中', NEED_SUPPLEMENT: '需補件', APPROVED: '已通過', REJECTED: '未通過' }
+const RESULT_LABEL = { APPROVED: '通過', REJECTED: '不通過', NEED_SUPPLEMENT: '需補件' }
 
-const STATUS = {
-  UNDER_REVIEW: '審核中', NEED_SUPPLEMENT: '需補件', APPROVED: '已通過', REJECTED: '未通過',
-}
+const apps = ref([])
+const loading = ref(false)
+const error = ref('')
+const notice = ref('')
+const decision = reactive({})  // application_id -> { result, comment }
+
+const isReviewer = computed(() => auth.role === 'REVIEWER')
+function fmtDate(t) { return t ? new Date(t).toLocaleString('zh-TW') : '' }
 
 async function load() {
-  error.value = ''
+  loading.value = true; error.value = ''
   try {
     const { data } = await listReviewApplications()
-    items.value = data
+    apps.value = data
+    for (const a of data) {
+      if (!decision[a.application_id]) decision[a.application_id] = { result: 'APPROVED', comment: '' }
+    }
   } catch (e) {
-    error.value = e.response?.data?.detail || '載入失敗'
+    error.value = e?.response?.data?.detail || '載入失敗'
+  } finally {
+    loading.value = false
   }
 }
 
-async function decide(a, result) {
-  error.value = ''
-  busy.value = a.application_id
+async function submit(a) {
+  error.value = ''; notice.value = ''
+  const d = decision[a.application_id]
   try {
-    await decideApi(a.application_id, { result, comment: comments[a.application_id] || null })
+    await decide(a.application_id, { result: d.result, comment: d.comment || null })
+    notice.value = `已完成「${a.scholarship_name || a.application_id}」的審查`
     await load()
   } catch (e) {
-    error.value = e.response?.data?.detail || '審查失敗'
-  } finally {
-    busy.value = null
+    error.value = e?.response?.data?.detail || '審查失敗'
   }
 }
 
 onMounted(() => {
   if (!auth.isLoggedIn) return router.push('/login')
-  if (auth.role !== 'REVIEWER' && auth.role !== 'ADMIN') {
-    error.value = '此頁僅供審查人員 / 管理員'
-    return
-  }
-  load()
+  if (isReviewer.value) load()
 })
 </script>
 
 <template>
   <main class="page">
-    <header class="bar">
-      <RouterLink to="/">← 首頁</RouterLink>
-      <h1>審查申請案</h1>
-    </header>
-    <p class="hint">依申請人 GPA 由高到低排序。</p>
+    <h1>審查申請案</h1>
+    <p v-if="!isReviewer" class="warn">此功能僅限審查人員（REVIEWER）。</p>
 
-    <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="(auth.role === 'REVIEWER' || auth.role === 'ADMIN') && !items.length" class="empty">目前沒有待審查的申請案。</p>
+    <template v-else>
+      <p v-if="notice" class="notice">{{ notice }}</p>
+      <p v-if="error" class="error">{{ error }}</p>
+      <p v-if="loading">載入中…</p>
+      <p v-else-if="apps.length === 0" class="muted">目前沒有待審查的申請。</p>
 
-    <table v-if="items.length">
-      <thead>
-        <tr><th>申請人</th><th>GPA</th><th>獎學金</th><th>目前狀態</th><th>自述</th><th>審查</th></tr>
-      </thead>
-      <tbody>
-        <tr v-for="a in items" :key="a.application_id">
-          <td>{{ a.student_name }}</td>
-          <td>{{ a.gpa ?? '—' }}</td>
-          <td>{{ a.scholarship_name }}</td>
-          <td>{{ STATUS[a.status] || a.status }}</td>
-          <td class="stmt">{{ a.statement || '—' }}</td>
-          <td class="actions">
-            <input v-model="comments[a.application_id]" placeholder="審查意見（選填）" />
-            <div class="btns">
-              <button class="ok" :disabled="busy === a.application_id" @click="decide(a, 'APPROVED')">通過</button>
-              <button class="no" :disabled="busy === a.application_id" @click="decide(a, 'REJECTED')">不通過</button>
-              <button class="sup" :disabled="busy === a.application_id" @click="decide(a, 'NEED_SUPPLEMENT')">補件</button>
+      <div v-else class="list">
+        <article v-for="a in apps" :key="a.application_id" class="app">
+          <div class="head">
+            <h3>{{ a.student_name }}<span class="gpa">GPA {{ a.gpa ?? '—' }}</span></h3>
+            <span class="status">目前：{{ STATUS_LABEL[a.status] || a.status }}</span>
+          </div>
+          <p class="sch">申請獎學金：{{ a.scholarship_name || '—' }}（申請時間 {{ fmtDate(a.created_at) }}）</p>
+
+          <div class="fields">
+            <div v-if="a.statement"><span class="k">申請理由</span><p>{{ a.statement }}</p></div>
+            <div class="inline">
+              <span><span class="k">電話</span>{{ a.contact_phone || '—' }}</span>
+              <span><span class="k">地址</span>{{ a.address || '—' }}</span>
             </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+            <div v-if="a.household_status"><span class="k">家庭狀況</span><p>{{ a.household_status }}</p></div>
+            <div v-if="a.academic_note"><span class="k">成績/排名</span><p>{{ a.academic_note }}</p></div>
+          </div>
+
+          <div class="recs" v-if="a.recommendations && a.recommendations.length">
+            <strong>推薦信</strong>
+            <div v-for="(rc, i) in a.recommendations" :key="i" class="rec">
+              <span class="who">{{ rc.teacher_name }} 老師</span>
+              <p>{{ rc.content || '（無內容）' }}</p>
+            </div>
+          </div>
+
+          <div class="prev" v-if="a.review_result">
+            最近審查：{{ a.reviewer_name || '—' }} 評為「{{ RESULT_LABEL[a.review_result] || a.review_result }}」
+            於 {{ fmtDate(a.reviewed_at) }}<span v-if="a.review_comment">，意見：{{ a.review_comment }}</span>
+          </div>
+
+          <div class="decide">
+            <select v-model="decision[a.application_id].result">
+              <option value="APPROVED">通過</option>
+              <option value="REJECTED">不通過</option>
+              <option value="NEED_SUPPLEMENT">需補件</option>
+            </select>
+            <input v-model="decision[a.application_id].comment" placeholder="審查意見（選填）" />
+            <button class="primary" @click="submit(a)">送出審查</button>
+          </div>
+        </article>
+      </div>
+    </template>
   </main>
 </template>
 
 <style scoped>
-.page { max-width: 1000px; margin: 4vh auto; padding: 0 16px; font-family: system-ui, sans-serif; }
-.bar { display: flex; align-items: center; gap: 16px; }
-.bar a { color: #2b6cb0; text-decoration: none; }
+.page { max-width: 860px; margin: 28px auto; padding: 0 16px; }
 h1 { font-size: 22px; }
-.hint { color: #888; font-size: 13px; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th, td { border-bottom: 1px solid #eee; padding: 10px; text-align: left; vertical-align: top; }
-th { background: #f7f9fb; }
-.stmt { color: #555; max-width: 220px; }
-.actions input { width: 160px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 8px; font-size: 13px; }
-.btns { display: flex; gap: 6px; margin-top: 6px; }
-.btns button { padding: 6px 10px; border: none; border-radius: 8px; color: #fff; cursor: pointer; font-size: 13px; }
-.btns button:disabled { opacity: .6; }
-.ok { background: #1a7f37; }
-.no { background: #b3261e; }
-.sup { background: #b35900; }
-.error { color: #c0392b; }
-.empty { color: #888; }
+h3 { margin: 0; font-size: 17px; display: flex; align-items: center; gap: 10px; }
+.gpa { font-size: 13px; color: #2b6cb0; background: #ebf8ff; padding: 2px 8px; border-radius: 999px; }
+.list { display: flex; flex-direction: column; gap: 16px; }
+.app { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; }
+.head { display: flex; align-items: center; justify-content: space-between; }
+.status { font-size: 13px; color: #718096; }
+.sch { color: #4a5568; font-size: 14px; }
+.fields { background: #f7fafc; border-radius: 10px; padding: 12px; margin: 10px 0; font-size: 14px; }
+.fields p { margin: 2px 0 8px; }
+.fields .inline { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 8px; }
+.k { display: inline-block; color: #718096; font-size: 12px; margin-right: 6px; }
+.recs { border-top: 1px dashed #e2e8f0; padding-top: 10px; margin-top: 6px; }
+.rec { background: #fffaf0; border: 1px solid #feebc8; border-radius: 10px; padding: 10px; margin: 8px 0; font-size: 14px; }
+.rec .who { color: #975a16; font-weight: 600; }
+.prev { background: #ebf8ff; color: #2c5282; font-size: 13px; border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+.decide { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+select, input { padding: 8px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 14px; }
+.decide input { flex: 1; min-width: 180px; }
+.primary { background: #2b6cb0; color: #fff; border: none; padding: 9px 16px; border-radius: 8px; cursor: pointer; }
+.muted { color: #a0aec0; }
+.notice { color: #22732f; }
+.error { color: #c53030; }
+.warn { color: #c05621; }
 </style>

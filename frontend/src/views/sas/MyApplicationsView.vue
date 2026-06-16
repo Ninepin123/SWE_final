@@ -1,88 +1,138 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+// SAS 我的申請進度（學生）：看狀態、邀請老師推薦、看推薦狀態。
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { listMyApplications } from '@/api/sas'
+import { listTeachers } from '@/api/aas'
+import { listMyRecommendations, requestRecommendation } from '@/api/trs'
 
 const router = useRouter()
 const auth = useAuthStore()
 
-const items = ref([])
-const error = ref('')
+const STATUS_LABEL = { UNDER_REVIEW: '審核中', NEED_SUPPLEMENT: '需補件', APPROVED: '已通過', REJECTED: '未通過' }
+const STATUS_CLASS = { UNDER_REVIEW: 'review', NEED_SUPPLEMENT: 'supp', APPROVED: 'ok', REJECTED: 'no' }
+const REC_LABEL = { REQUESTED: '已邀請', DRAFT: '撰寫中', SUBMITTED: '已送出' }
 
-const STATUS = {
-  UNDER_REVIEW: { label: '審核中', cls: 'review' },
-  NEED_SUPPLEMENT: { label: '需補件', cls: 'supplement' },
-  APPROVED: { label: '已通過', cls: 'approved' },
-  REJECTED: { label: '未通過', cls: 'rejected' },
-}
+const apps = ref([])
+const recs = ref([])
+const teachers = ref([])
+const loading = ref(false)
+const error = ref('')
+const notice = ref('')
+const pickTeacher = reactive({})  // application_id -> teacher_id
+
+const isStudent = computed(() => auth.role === 'STUDENT')
+function fmtDate(t) { return t ? new Date(t).toLocaleString('zh-TW') : '' }
+function recsFor(appId) { return recs.value.filter((r) => r.application_id === appId) }
 
 async function load() {
-  error.value = ''
+  loading.value = true; error.value = ''
   try {
-    const { data } = await listMyApplications()
-    items.value = data
+    const [a, r, t] = await Promise.all([listMyApplications(), listMyRecommendations(), listTeachers()])
+    apps.value = a.data
+    recs.value = r.data
+    teachers.value = t.data
   } catch (e) {
-    error.value = e.response?.data?.detail || '載入失敗'
+    error.value = e?.response?.data?.detail || '載入失敗'
+  } finally {
+    loading.value = false
   }
 }
 
-function fmt(d) {
-  return new Date(d).toLocaleString('zh-TW', { dateStyle: 'medium', timeStyle: 'short' })
+async function invite(appId) {
+  error.value = ''; notice.value = ''
+  const teacherId = pickTeacher[appId]
+  if (!teacherId) { error.value = '請先選擇老師'; return }
+  try {
+    await requestRecommendation({ application_id: appId, teacher_id: Number(teacherId) })
+    notice.value = '已送出推薦邀請'
+    pickTeacher[appId] = ''
+    const { data } = await listMyRecommendations()
+    recs.value = data
+  } catch (e) {
+    error.value = e?.response?.data?.detail || '邀請失敗'
+  }
 }
 
 onMounted(() => {
   if (!auth.isLoggedIn) return router.push('/login')
-  if (auth.role !== 'STUDENT') {
-    error.value = '此頁僅供學生查看'
-    return
-  }
-  load()
+  if (isStudent.value) load()
 })
 </script>
 
 <template>
   <main class="page">
-    <header class="bar">
-      <RouterLink to="/">← 首頁</RouterLink>
-      <h1>我的申請進度</h1>
-      <RouterLink to="/sas/apply" class="right">＋ 申請新獎學金</RouterLink>
-    </header>
+    <h1>我的申請進度</h1>
+    <p v-if="!isStudent" class="warn">此功能僅限學生帳號。</p>
 
-    <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="auth.role === 'STUDENT' && !items.length" class="empty">你還沒有任何申請。</p>
+    <template v-else>
+      <p v-if="notice" class="notice">{{ notice }}</p>
+      <p v-if="error" class="error">{{ error }}</p>
+      <p v-if="loading">載入中…</p>
+      <p v-else-if="apps.length === 0" class="muted">你還沒有任何申請。<RouterLink to="/sas/apply">去申請</RouterLink></p>
 
-    <table v-if="items.length">
-      <thead>
-        <tr><th>獎學金</th><th>狀態</th><th>申請時間</th><th>自述</th></tr>
-      </thead>
-      <tbody>
-        <tr v-for="a in items" :key="a.application_id">
-          <td>{{ a.scholarship_name }}</td>
-          <td><span class="badge" :class="STATUS[a.status]?.cls">{{ STATUS[a.status]?.label || a.status }}</span></td>
-          <td>{{ fmt(a.created_at) }}</td>
-          <td class="stmt">{{ a.statement || '—' }}</td>
-        </tr>
-      </tbody>
-    </table>
+      <div v-else class="list">
+        <article v-for="a in apps" :key="a.application_id" class="app">
+          <div class="head">
+            <h3>{{ a.scholarship_name || ('申請 #' + a.application_id) }}</h3>
+            <span :class="['pill', STATUS_CLASS[a.status]]">{{ STATUS_LABEL[a.status] || a.status }}</span>
+          </div>
+          <p class="when">申請時間：{{ fmtDate(a.created_at) }}</p>
+          <p class="statement" v-if="a.statement"><span class="lbl">申請理由：</span>{{ a.statement }}</p>
+
+          <div class="rec-box">
+            <strong>推薦信</strong>
+            <ul v-if="recsFor(a.application_id).length" class="recs">
+              <li v-for="rc in recsFor(a.application_id)" :key="rc.rec_id">
+                {{ rc.teacher_name }} —
+                <span :class="['rpill', rc.status === 'SUBMITTED' ? 'ok' : 'pend']">{{ REC_LABEL[rc.status] || rc.status }}</span>
+              </li>
+            </ul>
+            <p v-else class="muted small">尚未邀請任何老師</p>
+
+            <div class="invite">
+              <select v-model="pickTeacher[a.application_id]">
+                <option value="">選擇老師…</option>
+                <option v-for="t in teachers" :key="t.user_id" :value="t.user_id">
+                  {{ t.name }}<span v-if="t.department"> （{{ t.department }}）</span>
+                </option>
+              </select>
+              <button class="primary" @click="invite(a.application_id)">邀請推薦</button>
+            </div>
+          </div>
+        </article>
+      </div>
+    </template>
   </main>
 </template>
 
 <style scoped>
-.page { max-width: 820px; margin: 4vh auto; padding: 0 16px; font-family: system-ui, sans-serif; }
-.bar { display: flex; align-items: center; gap: 16px; }
-.bar a { color: #2b6cb0; text-decoration: none; }
-.right { margin-left: auto; }
+.page { max-width: 820px; margin: 28px auto; padding: 0 16px; }
 h1 { font-size: 22px; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th, td { border-bottom: 1px solid #eee; padding: 10px; text-align: left; vertical-align: top; }
-th { background: #f7f9fb; }
-.stmt { color: #555; max-width: 280px; }
-.badge { font-size: 12px; padding: 3px 10px; border-radius: 999px; }
-.review { background: #fff4e5; color: #b35900; }
-.supplement { background: #fdeaea; color: #b3261e; }
-.approved { background: #e6f4ea; color: #1a7f37; }
-.rejected { background: #f1f1f1; color: #777; }
-.error { color: #c0392b; }
-.empty { color: #888; }
+h3 { margin: 0; font-size: 17px; }
+.list { display: flex; flex-direction: column; gap: 14px; }
+.app { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; }
+.head { display: flex; align-items: center; justify-content: space-between; }
+.when { color: #718096; font-size: 13px; }
+.statement { color: #2d3748; font-size: 14px; }
+.lbl { color: #718096; }
+.rec-box { margin-top: 12px; border-top: 1px dashed #e2e8f0; padding-top: 12px; }
+.recs { margin: 8px 0; padding-left: 18px; font-size: 14px; }
+.invite { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+select { padding: 8px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 14px; }
+.primary { background: #2b6cb0; color: #fff; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+.pill { padding: 3px 10px; border-radius: 999px; font-size: 12px; }
+.pill.review { background: #feebc8; color: #7b341e; }
+.pill.supp { background: #fefcbf; color: #744210; }
+.pill.ok { background: #c6f6d5; color: #22543d; }
+.pill.no { background: #fed7d7; color: #742a2a; }
+.rpill { padding: 1px 8px; border-radius: 999px; font-size: 12px; }
+.rpill.ok { background: #c6f6d5; color: #22543d; }
+.rpill.pend { background: #e2e8f0; color: #4a5568; }
+.muted { color: #a0aec0; }
+.small { font-size: 13px; }
+.notice { color: #22732f; }
+.error { color: #c53030; }
+.warn { color: #c05621; }
 </style>

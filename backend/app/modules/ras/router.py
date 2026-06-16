@@ -1,6 +1,6 @@
 """RAS 審查與核發 — API 路由
-需求書：Chapter 8，功能需求 8.2.1–8.2.8
-v1 範圍：審查人員查看申請案（含 GPA 自動排序）、做出通過/不通過/補件決定。
+需求書：Chapter 8。範圍：審查人員查看申請案（GPA 排序、含推薦信與審查紀錄）、做出審查決定。
+注意：依需求僅「審查單位 / 審查人員(REVIEWER)」可審查（管理員不參與審查）。
 """
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -18,9 +18,8 @@ router = APIRouter(prefix="/api/ras", tags=["RAS 審查與核發"])
 def list_applications(
     scholarship_id: int | None = None,
     db: Session = Depends(get_db),
-    reviewer: User = Depends(require_roles("REVIEWER", "ADMIN")),
+    reviewer: User = Depends(require_roles("REVIEWER")),
 ):
-    """查詢待審查的申請案，預設依 GPA 由高到低排序（8.2.1 / 8.2.3）。"""
     return service.list_applications_for_review(db, reviewer, scholarship_id)
 
 
@@ -29,7 +28,6 @@ def decide(
     application_id: int,
     body: ReviewDecision,
     db: Session = Depends(get_db),
-    reviewer: User = Depends(require_roles("REVIEWER", "ADMIN")),
+    reviewer: User = Depends(require_roles("REVIEWER")),
 ):
-    """對申請案做出審查決定（通過/不通過/要求補件，8.2.4）。"""
     return service.decide(db, reviewer, application_id, body)
