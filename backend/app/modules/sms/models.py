@@ -1,7 +1,26 @@
-"""SMS — SQLAlchemy 資料模型（對應 database/schema/ 內本子系統的資料表）。
+"""SMS — SQLAlchemy 資料模型（對應 database/schema/02_sms_tables.sql）。"""
+from datetime import datetime
 
-規則：model 欄位必須與 database/schema/ 的 SQL 保持一致，
-改資料表時兩邊一起改、同一個 PR 提交。
-"""
-# from sqlalchemy import ...
-# from app.core.database import Base
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.database import Base
+
+
+class Scholarship(Base):
+    __tablename__ = "scholarships"
+
+    scholarship_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    unit_id: Mapped[int] = mapped_column(ForeignKey("units.unit_id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    quota: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    min_gpa: Mapped[float | None] = mapped_column(Numeric(3, 2))
+    department_limit: Mapped[str | None] = mapped_column(String(100))
+    category: Mapped[str] = mapped_column(String(20), nullable=False, default="OTHER")
+    description: Mapped[str | None] = mapped_column(Text)
+    deadline: Mapped[datetime | None] = mapped_column(DateTime)
+    status: Mapped[str] = mapped_column(String(10), nullable=False, default="OPEN")  # OPEN/CLOSED
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.user_id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

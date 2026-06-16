@@ -1,13 +1,11 @@
-// SAS 學生申請 — API 呼叫（負責人：填上姓名）
+// SAS 學生申請 — API 呼叫
 // 對應後端 backend/app/modules/sas/router.py，路徑前綴 /api/sas
 import http from './http'
 
-// 範例（骨架測試用，開發開始後可移除）：
-export function ping() {
-  return http.get('/sas/ping')
+export function apply(payload) {
+  return http.post('/sas/applications', payload)
 }
 
-// TODO(SAS): 依 router.py 規劃的端點逐一補上，例如：
-// export function listXxx(params) {
-//   return http.get('/sas/xxx', { params })
-// }
+export function listMyApplications() {
+  return http.get('/sas/applications/me')
+}

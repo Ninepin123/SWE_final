@@ -1,24 +1,47 @@
 """SMS 獎助學金資料管理 — API 路由
-負責人：（填上負責組員姓名）
 需求書：Chapter 5，功能需求 5.2.1–5.2.5
+v1 範圍：獎學金的列表/查詢（所有登入者），以及單位/管理員的新增。
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.modules.aas.models import User
+from app.modules.aas.security import get_current_user, require_roles
+from app.modules.sms import service
+from app.modules.sms.schemas import ScholarshipCreate, ScholarshipOut
 
 router = APIRouter(prefix="/api/sms", tags=["SMS 獎助學金資料管理"])
 
-# TODO(SMS):
-#   GET    /api/sms/scholarships                    獎學金列表（含分類/標籤篩選, NUKSAMS022/023）
-#   POST   /api/sms/scholarships                    新增獎學金（NUKSAMS005，獎助單位）
-#   GET    /api/sms/scholarships/{scholarship_id}   獎學金詳細資料
-#   PUT    /api/sms/scholarships/{scholarship_id}   修改獎學金（含條件/名額/截止日, NUKSAMS006/007）
-#   DELETE /api/sms/scholarships/{scholarship_id}   刪除獎學金
-#   GET    /api/sms/categories                      分類列表
-#
-# 注意：截止時間到達或名額額滿時自動關閉申請（NUKSAMS007）——
-#       建議以查詢時判斷（status 計算欄位），不要依賴排程。
+
+@router.get("/scholarships", response_model=list[ScholarshipOut])
+def list_scholarships(
+    only_open: bool = False,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """查詢獎學金；only_open=true 只回傳尚未截止且開放中的項目（NUKSAMS013）。"""
+    return service.list_scholarships(db, only_open=only_open)
 
 
-@router.get("/ping")
-def ping():
-    """骨架測試用端點，開發開始後可移除。"""
-    return {"module": "sms", "status": "ok"}
+@router.get("/scholarships/{scholarship_id}", response_model=ScholarshipOut)
+def get_scholarship(
+    scholarship_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return service.get_scholarship(db, scholarship_id)
+
+
+@router.post(
+    "/scholarships",
+    response_model=ScholarshipOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_scholarship(
+    body: ScholarshipCreate,
+    db: Session = Depends(get_db),
+    current: User = Depends(require_roles("SPONSOR", "ADMIN")),
+):
+    """新增獎學金（NUKSAMS005，僅獎助單位/管理員）。"""
+    return service.create_scholarship(db, body, current)
