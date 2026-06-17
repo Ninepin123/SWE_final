@@ -145,7 +145,7 @@ onMounted(() => {
       <section class="card">
         <h2>帳號清單</h2>
         <p v-if="loading">載入中…</p>
-        <table v-else class="tbl">
+        <table v-else class="data-table">
           <thead>
             <tr><th>ID</th><th>帳號</th><th>姓名</th><th>角色</th><th>系所</th><th>GPA</th><th>狀態</th><th>操作</th></tr>
           </thead>
@@ -158,7 +158,7 @@ onMounted(() => {
                 <td>{{ ROLE_LABEL[u.role] || u.role }}</td>
                 <td>{{ u.department || '—' }}</td>
                 <td>{{ u.gpa ?? '—' }}</td>
-                <td><span :class="['pill', u.status === 'ACTIVE' ? 'ok' : 'off']">{{ u.status === 'ACTIVE' ? '啟用' : '停用' }}</span></td>
+                <td><span :class="['status-badge', u.status === 'ACTIVE' ? 'status-badge--success' : 'status-badge--muted']">{{ u.status === 'ACTIVE' ? '啟用' : '停用' }}</span></td>
                 <td class="ops">
                   <button class="link" @click="startEdit(u)">編輯</button>
                   <button class="link danger" @click="remove(u)">刪除</button>
@@ -201,22 +201,21 @@ onMounted(() => {
 .page { max-width: 1000px; margin: 28px auto; padding: 0 16px; }
 h1 { font-size: 22px; }
 h2 { font-size: 16px; margin: 0 0 12px; }
-.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; margin-bottom: 18px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 18px; box-shadow: var(--shadow-xs); }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
-label { display: flex; flex-direction: column; font-size: 13px; color: #4a5568; gap: 4px; }
-input, select { padding: 8px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 14px; }
-.primary { background: #2b6cb0; color: #fff; border: none; padding: 9px 16px; border-radius: 8px; cursor: pointer; margin-right: 8px; }
-.ghost { background: #edf2f7; border: none; padding: 9px 16px; border-radius: 8px; cursor: pointer; }
-.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
-.tbl th, .tbl td { text-align: left; padding: 9px 8px; border-bottom: 1px solid #edf2f7; }
+label { display: flex; flex-direction: column; font-size: 13px; color: var(--text-secondary); gap: 4px; }
+.primary { background: var(--primary); color: #fff; border: none; padding: 9px 16px; border-radius: var(--radius-sm); cursor: pointer; margin-right: 8px; font-weight: 600; }
+.primary:hover { background: var(--primary-strong); }
+.ghost { background: var(--surface-muted); color: var(--text-secondary); border: none; padding: 9px 16px; border-radius: var(--radius-sm); cursor: pointer; }
+.ghost:hover { background: var(--surface-sunken); color: var(--text); }
+.data-table { font-size: 14px; }
+.data-table td:first-child { font-family: var(--font-mono); color: var(--muted); }
 .ops { display: flex; gap: 10px; }
-.link { background: none; border: none; color: #2b6cb0; cursor: pointer; text-decoration: underline; font-size: 13px; padding: 0; }
-.link.danger { color: #e53e3e; }
-.edit-row td { background: #f7fafc; }
-.pill { padding: 2px 8px; border-radius: 999px; font-size: 12px; }
-.pill.ok { background: #c6f6d5; color: #22543d; }
-.pill.off { background: #fed7d7; color: #742a2a; }
-.notice { color: #22732f; }
-.error { color: #c53030; }
-.warn { color: #c05621; }
+.link { background: none; border: none; color: var(--primary); cursor: pointer; text-decoration: underline; font-size: 13px; padding: 0; }
+.link:hover { color: var(--primary-strong); }
+.link.danger { color: var(--danger); }
+.edit-row td { background: var(--surface-muted); }
+.notice { color: var(--success); }
+.error { color: var(--danger); }
+.warn { color: var(--warning); }
 </style>

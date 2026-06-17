@@ -77,16 +77,16 @@ onMounted(() => {
 h1 { font-size: 22px; }
 h2 { font-size: 16px; margin: 0 0 12px; }
 h3 { margin: 0; font-size: 16px; }
-.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; margin-bottom: 18px; }
-.card label { display: flex; flex-direction: column; font-size: 13px; color: #4a5568; gap: 4px; margin-bottom: 10px; }
-input, textarea { padding: 8px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 14px; font-family: inherit; }
-.primary { background: #2b6cb0; color: #fff; border: none; padding: 9px 16px; border-radius: 8px; cursor: pointer; margin-right: 10px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 18px; box-shadow: var(--shadow-xs); }
+.card label { display: flex; flex-direction: column; font-size: 13px; color: var(--text-secondary); gap: 4px; margin-bottom: 10px; }
+.primary { background: var(--primary); color: #fff; border: none; padding: 9px 16px; border-radius: var(--radius-sm); cursor: pointer; margin-right: 10px; font-weight: 600; }
+.primary:hover { background: var(--primary-strong); }
 .list { display: flex; flex-direction: column; gap: 12px; }
-.ann { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; }
+.ann { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-xs); }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.time { color: #a0aec0; font-size: 12px; white-space: nowrap; }
-.body { color: #4a5568; font-size: 14px; margin: 6px 0 0; white-space: pre-wrap; }
-.muted { color: #a0aec0; }
-.notice { color: #22732f; }
-.error { color: #c53030; }
+.time { color: var(--muted); font-size: 12px; white-space: nowrap; font-family: var(--font-mono); }
+.body { color: var(--text-secondary); font-size: 14px; margin: 6px 0 0; white-space: pre-wrap; }
+.muted { color: var(--muted); }
+.notice { color: var(--success); }
+.error { color: var(--danger); }
 </style>

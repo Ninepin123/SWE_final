@@ -59,7 +59,13 @@ watch(() => route.fullPath, refreshUnread)
 <template>
   <header v-if="showNav" class="topnav">
     <div class="bar">
-      <RouterLink to="/" class="brand">NUKSAMS</RouterLink>
+      <RouterLink to="/" class="brand">
+        <span class="brand__seal seal" aria-hidden="true">奬</span>
+        <span class="brand__name">
+          <strong>高大獎助學金</strong>
+          <small>NUKSAMS</small>
+        </span>
+      </RouterLink>
       <nav class="links">
         <RouterLink v-for="l in links" :key="l.to" :to="l.to" class="navlink">{{ l.text }}</RouterLink>
       </nav>
@@ -78,25 +84,32 @@ watch(() => route.fullPath, refreshUnread)
 </template>
 
 <style scoped>
-.topnav { background: #1f3a5f; color: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .15); position: sticky; top: 0; z-index: 50; }
-.bar { max-width: 1100px; margin: 0 auto; display: flex; align-items: center; gap: 14px; padding: 10px 16px; flex-wrap: wrap; }
-.brand { color: #fff; font-weight: 800; font-size: 18px; letter-spacing: .5px; text-decoration: none; }
-.links { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; }
-.navlink { color: #cdd9ea; text-decoration: none; padding: 6px 10px; border-radius: 8px; font-size: 14px; }
-.navlink:hover { background: rgba(255, 255, 255, .12); color: #fff; }
-.navlink.router-link-exact-active { background: #2b6cb0; color: #fff; }
+.topnav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(253, 251, 246, 0.88);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+.bar { max-width: 1120px; margin: 0 auto; display: flex; align-items: center; gap: 16px; padding: 12px 22px; flex-wrap: wrap; }
+
+.brand { display: flex; align-items: center; gap: 11px; text-decoration: none; }
+.brand__seal { width: 38px; height: 38px; font-size: 22px; }
+.brand__name { display: grid; line-height: 1.2; }
+.brand__name strong { font-family: var(--font-serif); font-size: 16px; font-weight: 600; color: var(--text); }
+.brand__name small { color: var(--muted); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; }
+
+.links { display: flex; gap: 2px; flex-wrap: wrap; flex: 1; }
+.navlink { color: var(--text-secondary); text-decoration: none; padding: 7px 12px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; transition: background 0.12s ease, color 0.12s ease; }
+.navlink:hover { background: var(--surface-muted); color: var(--text); }
+.navlink.router-link-exact-active { background: var(--primary-soft); color: var(--primary); }
+
 .right { display: flex; align-items: center; gap: 12px; }
 .bell { position: relative; text-decoration: none; font-size: 18px; line-height: 1; }
 .bell-ic { filter: grayscale(.1); }
-.badge { position: absolute; top: -8px; right: -10px; background: #e53e3e; color: #fff; font-size: 11px; min-width: 17px; height: 17px; line-height: 17px; text-align: center; border-radius: 9px; padding: 0 4px; }
-.who { font-size: 13px; color: #e7eef7; }
-.logout { background: rgba(255, 255, 255, .14); color: #fff; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; }
-.logout:hover { background: rgba(255, 255, 255, .26); }
-</style>
-
-<style>
-/* 全域基礎樣式（非 scoped） */
-* { box-sizing: border-box; }
-body { margin: 0; background: #f4f6f9; color: #1a202c; font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif; }
-a { color: #2b6cb0; }
+.badge { position: absolute; top: -8px; right: -10px; background: var(--seal); color: #fff; font-size: 11px; min-width: 17px; height: 17px; line-height: 17px; text-align: center; border-radius: 9px; padding: 0 4px; font-weight: 700; }
+.who { font-size: 13px; color: var(--text-secondary); }
+.logout { background: transparent; color: var(--text-secondary); border: 1px solid var(--line-strong); padding: 7px 13px; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; font-weight: 600; transition: background 0.12s ease, border-color 0.12s ease; }
+.logout:hover { background: var(--surface-muted); border-color: var(--primary); color: var(--primary); }
 </style>

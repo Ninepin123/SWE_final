@@ -85,20 +85,21 @@ onMounted(() => {
 h1 { font-size: 22px; }
 h3 { margin: 0; font-size: 17px; }
 .list { display: flex; flex-direction: column; gap: 16px; }
-.rec { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; }
+.rec { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px; box-shadow: var(--shadow-xs); }
 .head { display: flex; align-items: center; justify-content: space-between; }
-.sch { color: #718096; font-size: 13px; }
-textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 14px; font-family: inherit; margin: 8px 0; }
-textarea:disabled { background: #f7fafc; color: #4a5568; }
+.sch { color: var(--muted); font-size: 13px; }
+textarea { margin: 8px 0; }
 .actions { display: flex; gap: 8px; }
-.primary { background: #2b6cb0; color: #fff; border: none; padding: 9px 16px; border-radius: 8px; cursor: pointer; }
-.ghost { background: #edf2f7; border: none; padding: 9px 16px; border-radius: 8px; cursor: pointer; }
-.done { color: #22732f; font-size: 13px; }
-.pill { padding: 3px 10px; border-radius: 999px; font-size: 12px; }
-.pill.ok { background: #c6f6d5; color: #22543d; }
-.pill.pend { background: #feebc8; color: #7b341e; }
-.muted { color: #a0aec0; }
-.notice { color: #22732f; }
-.error { color: #c53030; }
-.warn { color: #c05621; }
+.primary { background: var(--primary); color: #fff; border: none; padding: 9px 16px; border-radius: var(--radius-sm); cursor: pointer; font-weight: 600; }
+.primary:hover { background: var(--primary-strong); }
+.ghost { background: var(--surface-muted); color: var(--text-secondary); border: none; padding: 9px 16px; border-radius: var(--radius-sm); cursor: pointer; font-weight: 600; }
+.ghost:hover { background: var(--surface-sunken); color: var(--text); }
+.done { color: var(--success); font-size: 13px; }
+.pill { padding: 3px 10px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 700; }
+.pill.ok { background: var(--success-soft); color: var(--success); }
+.pill.pend { background: var(--warning-soft); color: var(--warning); }
+.muted { color: var(--muted); }
+.notice { color: var(--success); }
+.error { color: var(--danger); }
+.warn { color: var(--warning); }
 </style>
