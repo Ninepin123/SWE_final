@@ -1,18 +1,39 @@
-// SMS 獎助學金資料管理 — API（對應 /api/sms）
-import http from './http'
+// SMS 獎助學金資料管理 — API 呼叫（負責人：填上姓名）
+// 對應後端 backend/app/modules/sms/router.py，路徑前綴 /api/sms
+import http, { withApiFallback } from './http'
+import * as mock from '@/services/mockBackend'
+
+// 範例（骨架測試用，開發開始後可移除）：
+export function ping() {
+  return http.get('/sms/ping')
+}
 
 export function listScholarships(params) {
-  return http.get('/sms/scholarships', { params })
+  return withApiFallback(() => http.get('/sms/scholarships', { params }), () =>
+    mock.listScholarships(params),
+  )
 }
-export function getScholarship(id) {
-  return http.get(`/sms/scholarships/${id}`)
+
+export function getScholarship(scholarshipId) {
+  return withApiFallback(() => http.get(`/sms/scholarships/${scholarshipId}`), () =>
+    mock.getScholarship(scholarshipId),
+  )
 }
-export function createScholarship(payload) {
-  return http.post('/sms/scholarships', payload)
+
+export function createScholarship(data) {
+  return withApiFallback(() => http.post('/sms/scholarships', data), () =>
+    mock.createScholarship(data),
+  )
 }
-export function updateScholarship(id, payload) {
-  return http.put(`/sms/scholarships/${id}`, payload)
+
+export function updateScholarship(scholarshipId, data) {
+  return withApiFallback(() => http.put(`/sms/scholarships/${scholarshipId}`, data), () =>
+    mock.updateScholarship(scholarshipId, data),
+  )
 }
-export function deleteScholarship(id) {
-  return http.delete(`/sms/scholarships/${id}`)
+
+export function deleteScholarship(scholarshipId) {
+  return withApiFallback(() => http.delete(`/sms/scholarships/${scholarshipId}`), () =>
+    mock.deleteScholarship(scholarshipId),
+  )
 }

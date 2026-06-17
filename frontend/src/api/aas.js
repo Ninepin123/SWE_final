@@ -1,30 +1,39 @@
-// AAS 帳號與權限管理 — API（對應 /api/aas）
-import http from './http'
+// AAS 帳號與權限管理 — API 呼叫（負責人：填上姓名）
+// 對應後端 backend/app/modules/aas/router.py，路徑前綴 /api/aas
+import http, { withApiFallback } from './http'
+import * as mock from '@/services/mockBackend'
 
-export function login(account, password) {
-  return http.post('/aas/login', { account, password })
+// 範例（骨架測試用，開發開始後可移除）：
+export function ping() {
+  return http.get('/aas/ping')
 }
-export function logout() {
-  return http.post('/aas/logout')
-}
+
 export function getMe() {
-  return http.get('/aas/me')
+  return withApiFallback(() => http.get('/aas/me'), () => mock.fetchMe())
 }
-export function listTeachers() {
-  return http.get('/aas/teachers')
+
+export function loginAs(role) {
+  return mock.loginAs(role)
 }
-export function listUsers() {
-  return http.get('/aas/users')
+
+export function logout() {
+  return mock.logout()
 }
-export function createUser(payload) {
-  return http.post('/aas/users', payload)
+
+export function listUsers(params) {
+  return withApiFallback(() => http.get('/aas/users', { params }), () => mock.listUsers(params))
 }
-export function updateUser(id, payload) {
-  return http.put(`/aas/users/${id}`, payload)
+
+export function createUser(data) {
+  return withApiFallback(() => http.post('/aas/users', data), () => mock.createUser(data))
 }
-export function deleteUser(id) {
-  return http.delete(`/aas/users/${id}`)
+
+export function updateUser(userId, data) {
+  return withApiFallback(() => http.put(`/aas/users/${userId}`, data), () =>
+    mock.updateUser(userId, data),
+  )
 }
-export function listAuditLogs() {
-  return http.get('/aas/audit-logs')
+
+export function deleteUser(userId) {
+  return withApiFallback(() => http.delete(`/aas/users/${userId}`), () => mock.deleteUser(userId))
 }
