@@ -2,42 +2,49 @@
 // 其他子系統需要「目前登入者是誰、角色為何」時，一律從這裡取，
 // 不要自己讀 localStorage。
 import { defineStore } from 'pinia'
-import { login as apiLogin, logout as apiLogout, getMe } from '@/api/aas'
+import { getMe, loginAs as loginAsApi, logout as logoutApi } from '@/api/aas'
+import { ROLE_LABELS } from '@/services/mockBackend'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: localStorage.getItem('token') || null,
-    user: JSON.parse(localStorage.getItem('user') || 'null'),
+    user: null,
+    loading: false,
   }),
   getters: {
     isLoggedIn: (state) => !!state.token,
-    role: (state) => state.user?.role || null,
+    role: (state) => state.user?.role,
+    roleLabel: (state) => ROLE_LABELS[state.user?.role] ?? '未登入',
+    canAccess: (state) => (roles = []) => {
+      if (!roles.length) return true
+      return roles.includes(state.user?.role)
+    },
   },
   actions: {
-    async login(account, password) {
-      const { data } = await apiLogin(account, password)
-      this.token = data.access_token
-      this.user = data.user
-      localStorage.setItem('token', data.access_token)
-      localStorage.setItem('user', JSON.stringify(data.user))
-      return data.user
-    },
     async fetchMe() {
-      const { data } = await getMe()
-      this.user = data
-      localStorage.setItem('user', JSON.stringify(data))
-      return data
+      if (!this.token) return null
+      this.loading = true
+      try {
+        this.user = await getMe()
+        return this.user
+      } finally {
+        this.loading = false
+      }
+    },
+    async loginAs(role) {
+      this.loading = true
+      try {
+        this.user = await loginAsApi(role)
+        this.token = localStorage.getItem('token')
+        return this.user
+      } finally {
+        this.loading = false
+      }
     },
     async logout() {
-      try {
-        await apiLogout()
-      } catch (e) {
-        // 無狀態 JWT，後端登出失敗也不影響前端清除
-      }
+      await logoutApi()
       this.token = null
       this.user = null
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
     },
   },
 })

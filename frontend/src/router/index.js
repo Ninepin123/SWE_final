@@ -14,22 +14,60 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'home',
-      component: () => import('@/views/common/HomeView.vue'),
+      redirect: '/dashboard',
+    },
+    {
+      path: '/dashboard',
+      name: 'dashboard',
+      component: () => import('@/views/common/DashboardView.vue'),
+      meta: {
+        title: '系統總覽',
+        roles: ['STUDENT', 'REVIEWER', 'ADMIN', 'RECOMMENDER'],
+      },
+    },
+    {
+      path: '/forbidden',
+      name: 'forbidden',
+      component: () => import('@/views/common/ForbiddenView.vue'),
+      meta: {
+        title: '無權限',
+      },
     },
     ...moduleRoutes,
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/dashboard',
+    },
   ],
 })
 
-// 全域導航守衛（NUKSAMS039）：未登入只能停在 /login；已登入就別再進 /login。
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
+  if (to.meta.public) {
+    return true
+  }
+
   const auth = useAuthStore()
-  if (to.path !== '/login' && !auth.isLoggedIn) {
-    return { path: '/login' }
+  if (!auth.token) {
+    return {
+      name: 'aas-login',
+      query: {
+        redirect: to.fullPath,
+      },
+    }
   }
-  if (to.path === '/login' && auth.isLoggedIn) {
-    return { path: '/' }
+
+  if (!auth.user) {
+    await auth.fetchMe()
   }
+
+  const roles = to.meta.roles || []
+  if (roles.length && !roles.includes(auth.role)) {
+    return {
+      name: 'forbidden',
+    }
+  }
+
+  return true
 })
 
 export default router

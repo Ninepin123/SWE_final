@@ -1,18 +1,19 @@
-// NCS 通知與溝通 — API（對應 /api/ncs）
-import http from './http'
+// NCS 通知與溝通 — API 呼叫（負責人：填上姓名）
+// 對應後端 backend/app/modules/ncs/router.py，路徑前綴 /api/ncs
+import http, { withApiFallback } from './http'
+import * as mock from '@/services/mockBackend'
 
-export function listNotifications() {
-  return http.get('/ncs/notifications')
+// 範例（骨架測試用，開發開始後可移除）：
+export function ping() {
+  return http.get('/ncs/ping')
 }
-export function unreadCount() {
-  return http.get('/ncs/notifications/unread_count')
+
+export function listNotifications(userId) {
+  return withApiFallback(() => http.get('/ncs/notifications'), () => mock.listNotifications(userId))
 }
-export function markRead(id) {
-  return http.post(`/ncs/notifications/${id}/read`)
-}
-export function listAnnouncements() {
-  return http.get('/ncs/announcements')
-}
-export function createAnnouncement(payload) {
-  return http.post('/ncs/announcements', payload)
+
+export function markNotificationRead(userId, notificationId) {
+  return withApiFallback(() => http.put(`/ncs/notifications/${notificationId}/read`), () =>
+    mock.markNotificationRead(userId, notificationId),
+  )
 }

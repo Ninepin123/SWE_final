@@ -1,115 +1,156 @@
 <script setup>
-// SAS 個人資料（學生）：身分資料唯讀，聯絡方式/緊急聯絡人可編輯。
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { onMounted, reactive, ref } from 'vue'
+import BaseCard from '@/components/common/BaseCard.vue'
+import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 import { getProfile, updateProfile } from '@/api/sas'
+import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 
-const router = useRouter()
 const auth = useAuthStore()
-
-const identity = ref(null)
-const form = reactive({ contact_phone: '', address: '', emergency_contact_name: '', emergency_contact_phone: '' })
-const loading = ref(false)
+const toast = useToastStore()
+const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
-const notice = ref('')
 
-const isStudent = computed(() => auth.role === 'STUDENT')
+const form = reactive({
+  studentId: '',
+  name: '',
+  department: '',
+  grade: '',
+  email: '',
+  phone: '',
+  address: '',
+  gpa: '',
+  credits: '',
+  familyStatus: '',
+  bankAccount: '',
+  emergencyContact: '',
+})
 
-async function load() {
-  loading.value = true; error.value = ''
-  try {
-    const { data } = await getProfile()
-    identity.value = data
-    Object.assign(form, {
-      contact_phone: data.contact_phone || '',
-      address: data.address || '',
-      emergency_contact_name: data.emergency_contact_name || '',
-      emergency_contact_phone: data.emergency_contact_phone || '',
-    })
-  } catch (e) {
-    error.value = e?.response?.data?.detail || '載入失敗'
-  } finally {
-    loading.value = false
-  }
+function validate() {
+  error.value = ''
+  if (!form.email.includes('@')) error.value = 'Email 格式不正確。'
+  if (!form.phone) error.value = '請填寫聯絡電話。'
+  if (Number(form.gpa) < 0 || Number(form.gpa) > 4.3) error.value = 'GPA 必須介於 0 到 4.3。'
+  return !error.value
 }
 
 async function save() {
-  saving.value = true; error.value = ''; notice.value = ''
+  if (!validate()) return
+  saving.value = true
   try {
-    await updateProfile({
-      contact_phone: form.contact_phone || null,
-      address: form.address || null,
-      emergency_contact_name: form.emergency_contact_name || null,
-      emergency_contact_phone: form.emergency_contact_phone || null,
+    const updated = await updateProfile(auth.user.id, {
+      grade: form.grade,
+      email: form.email,
+      phone: form.phone,
+      address: form.address,
+      gpa: Number(form.gpa),
+      credits: Number(form.credits),
+      familyStatus: form.familyStatus,
+      bankAccount: form.bankAccount,
+      emergencyContact: form.emergencyContact,
     })
-    notice.value = '已儲存'
-  } catch (e) {
-    error.value = e?.response?.data?.detail || '儲存失敗'
+    Object.assign(form, updated)
+    toast.success('個人資料已更新')
   } finally {
     saving.value = false
   }
 }
 
-onMounted(() => {
-  if (!auth.isLoggedIn) return router.push('/login')
-  if (isStudent.value) load()
+onMounted(async () => {
+  Object.assign(form, await getProfile(auth.user.id))
+  loading.value = false
 })
 </script>
 
 <template>
-  <main class="page">
-    <h1>個人資料</h1>
-    <p v-if="!isStudent" class="warn">此功能僅限學生帳號。</p>
+  <LoadingSkeleton v-if="loading" :rows="5" />
 
-    <template v-else>
-      <p v-if="loading">載入中…</p>
-      <template v-else-if="identity">
-        <section class="card readonly">
-          <h2>身分資料（不可修改）</h2>
-          <div class="rows">
-            <div><span class="k">姓名</span>{{ identity.name }}</div>
-            <div><span class="k">學號</span>{{ identity.account }}</div>
-            <div><span class="k">系所</span>{{ identity.department || '—' }}</div>
-            <div><span class="k">GPA</span>{{ identity.gpa ?? '—' }}</div>
-            <div><span class="k">Email</span>{{ identity.email || '—' }}</div>
-          </div>
-          <p class="hint">如需修改學號、姓名、GPA 等核心資料，請洽系統管理員。</p>
-        </section>
+  <div v-else class="page-grid">
+    <BaseCard title="我的個人資料" eyebrow="Profile">
+      <p class="muted-text">
+        學號、姓名與科系為核心資料，需由管理單位更正；其餘資料會帶入獎學金申請表。
+      </p>
+      <p v-if="error" class="form-error">{{ error }}</p>
 
-        <section class="card">
-          <h2>聯絡資料（可修改）</h2>
-          <div class="form">
-            <label>聯絡電話<input v-model="form.contact_phone" /></label>
-            <label>通訊地址<input v-model="form.address" /></label>
-            <label>緊急聯絡人<input v-model="form.emergency_contact_name" /></label>
-            <label>緊急聯絡電話<input v-model="form.emergency_contact_phone" /></label>
-          </div>
-          <button class="primary" :disabled="saving" @click="save">{{ saving ? '儲存中…' : '儲存' }}</button>
-          <span v-if="notice" class="notice">{{ notice }}</span>
-          <span v-if="error" class="error">{{ error }}</span>
-        </section>
-      </template>
-    </template>
-  </main>
+      <div class="field-group">
+        <p class="field-group__title">核心資料</p>
+        <p class="field-group__hint">以下欄位由管理單位維護，如需更正請聯繫系統管理員。</p>
+        <div class="form-grid">
+          <label>
+            <span>學號</span>
+            <input v-model="form.studentId" disabled type="text" />
+          </label>
+          <label>
+            <span>姓名</span>
+            <input v-model="form.name" disabled type="text" />
+          </label>
+          <label>
+            <span>科系</span>
+            <input v-model="form.department" disabled type="text" />
+          </label>
+          <label>
+            <span>年級</span>
+            <input v-model="form.grade" type="text" />
+          </label>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <p class="field-group__title">聯絡資料</p>
+        <div class="form-grid">
+          <label>
+            <span>Email</span>
+            <input v-model="form.email" type="email" />
+          </label>
+          <label>
+            <span>聯絡電話</span>
+            <input v-model="form.phone" type="tel" />
+          </label>
+          <label class="form-grid__wide">
+            <span>通訊地址</span>
+            <input v-model="form.address" type="text" />
+          </label>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <p class="field-group__title">學業與經濟</p>
+        <div class="form-grid">
+          <label>
+            <span>GPA</span>
+            <input v-model="form.gpa" max="4.3" min="0" step="0.01" type="number" />
+          </label>
+          <label>
+            <span>已修學分</span>
+            <input v-model="form.credits" min="0" type="number" />
+          </label>
+          <label class="form-grid__wide">
+            <span>家庭與經濟狀況</span>
+            <textarea v-model="form.familyStatus" rows="4" />
+          </label>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <p class="field-group__title">撥款與緊急聯絡</p>
+        <div class="form-grid">
+          <label>
+            <span>撥款帳戶</span>
+            <input v-model="form.bankAccount" type="text" />
+          </label>
+          <label>
+            <span>緊急聯絡人</span>
+            <input v-model="form.emergencyContact" type="text" />
+          </label>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="primary-button" type="button" :disabled="saving" @click="save">
+          {{ saving ? '儲存中' : '儲存變更' }}
+        </button>
+      </div>
+    </BaseCard>
+  </div>
 </template>
-
-<style scoped>
-.page { max-width: 640px; margin: 28px auto; padding: 0 16px; }
-h1 { font-size: 22px; }
-h2 { font-size: 16px; margin: 0 0 12px; }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow-xs); }
-.readonly { background: var(--surface-muted); }
-.rows { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px; }
-.rows .k { display: inline-block; width: 60px; color: var(--muted); }
-.hint { color: var(--muted); font-size: 12px; margin: 12px 0 0; }
-.form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-label { display: flex; flex-direction: column; font-size: 13px; color: var(--text-secondary); gap: 4px; }
-.primary { background: var(--primary); color: #fff; border: none; padding: 9px 18px; border-radius: var(--radius-sm); cursor: pointer; margin-right: 10px; font-weight: 600; }
-.primary:hover { background: var(--primary-strong); }
-.primary:disabled { opacity: .6; cursor: default; }
-.notice { color: var(--success); }
-.error { color: var(--danger); }
-.warn { color: var(--warning); }
-</style>

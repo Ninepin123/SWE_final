@@ -1,76 +1,99 @@
 <script setup>
-// NCS 我的通知。
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import BaseCard from '@/components/common/BaseCard.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
+import { listNotifications, markNotificationRead } from '@/api/ncs'
 import { useAuthStore } from '@/stores/auth'
-import { listNotifications, markRead } from '@/api/ncs'
+import { useToastStore } from '@/stores/toast'
 
-const router = useRouter()
 const auth = useAuthStore()
-const items = ref([])
-const loading = ref(false)
-const error = ref('')
+const toast = useToastStore()
+const loading = ref(true)
+const notifications = ref([])
+const filter = ref('all')
 
-function fmtDate(t) { return t ? new Date(t).toLocaleString('zh-TW') : '' }
+const visibleNotifications = computed(() => {
+  if (filter.value === 'unread') return notifications.value.filter((item) => !item.read)
+  return notifications.value
+})
 
-async function load() {
-  loading.value = true; error.value = ''
-  try {
-    const { data } = await listNotifications()
-    items.value = data
-  } catch (e) {
-    error.value = e?.response?.data?.detail || '載入失敗'
-  } finally {
-    loading.value = false
-  }
+function formatDate(value) {
+  return new Intl.DateTimeFormat('zh-TW', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
 }
 
-async function read(n) {
-  try {
-    await markRead(n.notification_id)
-    await load()
-  } catch (e) {
-    error.value = e?.response?.data?.detail || '操作失敗'
-  }
+async function reload() {
+  notifications.value = await listNotifications(auth.user.id)
 }
 
-onMounted(() => {
-  if (!auth.isLoggedIn) return router.push('/login')
-  load()
+async function read(item) {
+  if (item.read) return
+  await markNotificationRead(auth.user.id, item.id)
+  toast.success('已標記為已讀')
+  await reload()
+}
+
+onMounted(async () => {
+  await reload()
+  loading.value = false
 })
 </script>
 
 <template>
-  <main class="page">
-    <h1>我的通知</h1>
-    <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="loading">載入中…</p>
-    <p v-else-if="items.length === 0" class="muted">目前沒有通知。</p>
+  <div class="page-grid">
+    <BaseCard title="通知中心" eyebrow="Notifications">
+      <div class="segmented">
+        <button
+          type="button"
+          :class="{ active: filter === 'all' }"
+          @click="filter = 'all'"
+        >
+          全部
+        </button>
+        <button
+          type="button"
+          :class="{ active: filter === 'unread' }"
+          @click="filter = 'unread'"
+        >
+          未讀
+        </button>
+      </div>
+    </BaseCard>
 
-    <ul v-else class="list">
-      <li v-for="n in items" :key="n.notification_id" :class="['item', { unread: !n.is_read }]">
-        <div class="row">
-          <strong>{{ n.title }}</strong>
-          <span class="time">{{ fmtDate(n.created_at) }}</span>
-        </div>
-        <p v-if="n.body" class="body">{{ n.body }}</p>
-        <button v-if="!n.is_read" class="link" @click="read(n)">標記為已讀</button>
-      </li>
-    </ul>
-  </main>
+    <LoadingSkeleton v-if="loading" :rows="5" />
+    <EmptyState
+      v-else-if="!visibleNotifications.length"
+      title="目前沒有通知"
+      description="申請成功、補件、審查結果與推薦信提醒會出現在這裡。"
+      icon="notification"
+    />
+
+    <BaseCard v-else>
+      <div class="notification-list">
+        <button
+          v-for="item in visibleNotifications"
+          :key="item.id"
+          type="button"
+          class="notification-item"
+          :class="[`notification-item--${item.type}`, { 'notification-item--read': item.read }]"
+          @click="read(item)"
+        >
+          <span class="notification-item__dot" />
+          <div>
+            <div class="notification-item__top">
+              <strong>{{ item.title }}</strong>
+              <time>{{ formatDate(item.createdAt) }}</time>
+            </div>
+            <p>{{ item.message }}</p>
+          </div>
+          <span>{{ item.read ? '已讀' : '未讀' }}</span>
+        </button>
+      </div>
+    </BaseCard>
+  </div>
 </template>
-
-<style scoped>
-.page { max-width: 680px; margin: 28px auto; padding: 0 16px; }
-h1 { font-size: 22px; }
-.list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.item { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px; box-shadow: var(--shadow-xs); }
-.item.unread { border-left: 4px solid var(--primary); background: var(--primary-tint); }
-.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.time { color: var(--muted); font-size: 12px; white-space: nowrap; font-family: var(--font-mono); }
-.body { color: var(--text-secondary); font-size: 14px; margin: 6px 0; }
-.link { background: none; border: none; color: var(--primary); cursor: pointer; text-decoration: underline; font-size: 13px; padding: 0; }
-.link:hover { color: var(--primary-strong); }
-.muted { color: var(--muted); }
-.error { color: var(--danger); }
-</style>
