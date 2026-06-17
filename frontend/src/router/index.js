@@ -3,6 +3,7 @@
 //    請把自己的路由寫在 src/router/modules/<子系統>.js（export default 一個陣列），
 //    這裡會自動載入合併，避免多人改同一檔造成衝突。
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const moduleRoutes = Object.values(
   import.meta.glob('./modules/*.js', { eager: true }),
@@ -13,13 +14,60 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'home',
-      component: () => import('@/views/common/HomeView.vue'),
+      redirect: '/dashboard',
+    },
+    {
+      path: '/dashboard',
+      name: 'dashboard',
+      component: () => import('@/views/common/DashboardView.vue'),
+      meta: {
+        title: '系統總覽',
+        roles: ['STUDENT', 'REVIEWER', 'ADMIN', 'RECOMMENDER'],
+      },
+    },
+    {
+      path: '/forbidden',
+      name: 'forbidden',
+      component: () => import('@/views/common/ForbiddenView.vue'),
+      meta: {
+        title: '無權限',
+      },
     },
     ...moduleRoutes,
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/dashboard',
+    },
   ],
 })
 
-// TODO(AAS): 登入功能完成後，在這裡加全域導航守衛（未登入導向 /login, NUKSAMS039）
+router.beforeEach(async (to) => {
+  if (to.meta.public) {
+    return true
+  }
+
+  const auth = useAuthStore()
+  if (!auth.token) {
+    return {
+      name: 'aas-login',
+      query: {
+        redirect: to.fullPath,
+      },
+    }
+  }
+
+  if (!auth.user) {
+    await auth.fetchMe()
+  }
+
+  const roles = to.meta.roles || []
+  if (roles.length && !roles.includes(auth.role)) {
+    return {
+      name: 'forbidden',
+    }
+  }
+
+  return true
+})
 
 export default router

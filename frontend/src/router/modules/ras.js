@@ -2,10 +2,13 @@
 // 此檔由 router/index.js 自動載入，只需要 export default 路由陣列。
 // 頁面元件放在 src/views/ras/，命名用 PascalCase + View 結尾。
 export default [
-  // TODO(RAS): 例如
-  // {
-  //   path: '/ras/xxx',
-  //   name: 'ras-xxx',
-  //   component: () => import('@/views/ras/XxxView.vue'),
-  // },
+  {
+    path: '/reviews',
+    name: 'ras-reviews',
+    component: () => import('@/views/ras/ReviewQueueView.vue'),
+    meta: {
+      title: '申請案審查',
+      roles: ['REVIEWER'],
+    },
+  },
 ]
