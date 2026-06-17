@@ -1,26 +1,41 @@
 """NCS 通知與溝通 — API 路由
-負責人：（填上負責組員姓名）
-需求書：Chapter 9，功能需求 9.2.1–9.2.6
+需求書：Chapter 9。v1 範圍：站內通知（列表/未讀數/標記已讀）與公告（列表 + 管理員發布）。
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.modules.aas.models import User
+from app.modules.aas.security import get_current_user, require_roles
+from app.modules.ncs import service
+from app.modules.ncs.schemas import AnnouncementCreate, AnnouncementOut, NotificationOut
 
 router = APIRouter(prefix="/api/ncs", tags=["NCS 通知與溝通"])
 
-# TODO(NCS):
-#   GET    /api/ncs/notifications                   我的站內通知列表
-#   PUT    /api/ncs/notifications/{notif_id}/read   標記已讀
-#   GET    /api/ncs/announcements                   公告列表（NUKSAMS020）
-#   POST   /api/ncs/announcements                   發布公告（僅管理員）
-#   GET    /api/ncs/messages                        留言板（NUKSAMS018）
-#   POST   /api/ncs/messages                        發送留言
-#   POST   /api/ncs/issues                          問題回報（NUKSAMS021）
-#
-# 另外：NCS 需提供「發送通知」的共用 service 函式（例如 notify(user_id, ...)），
-# 供 SAS/RAS/TRS 在狀態異動時呼叫；Email 失敗需記錄並重送（NUKSAMS036）。
-# 截止提醒（NUKSAMS003）建議以排程實作，可後期再加。
+
+@router.get("/notifications", response_model=list[NotificationOut])
+def my_notifications(db: Session = Depends(get_db), current: User = Depends(get_current_user)):
+    return service.list_my(db, current)
 
 
-@router.get("/ping")
-def ping():
-    """骨架測試用端點，開發開始後可移除。"""
-    return {"module": "ncs", "status": "ok"}
+@router.get("/notifications/unread_count")
+def unread_count(db: Session = Depends(get_db), current: User = Depends(get_current_user)):
+    return {"count": service.unread_count(db, current)}
+
+
+@router.post("/notifications/{notification_id}/read")
+def mark_read(notification_id: int, db: Session = Depends(get_db), current: User = Depends(get_current_user)):
+    service.mark_read(db, current, notification_id)
+    return {"detail": "已標記為已讀"}
+
+
+@router.get("/announcements", response_model=list[AnnouncementOut])
+def announcements(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    return service.list_announcements(db)
+
+
+@router.post("/announcements", response_model=AnnouncementOut, status_code=status.HTTP_201_CREATED)
+def create_announcement(
+    body: AnnouncementCreate, db: Session = Depends(get_db), current: User = Depends(require_roles("ADMIN"))
+):
+    return service.create_announcement(db, body, current)

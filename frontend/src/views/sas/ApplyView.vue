@@ -1,107 +1,152 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+// SAS 瀏覽 / 申請獎學金（學生）。已申請過的獎學金，申請鈕會停用。
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { listScholarships } from '@/api/sms'
-import { apply as applyApi } from '@/api/sas'
+import { apply, listMyApplications } from '@/api/sas'
 
 const router = useRouter()
 const auth = useAuthStore()
 
+const CAT_LABEL = { SCHOOL: '校內', GOVERNMENT: '政府', PRIVATE: '民間', LOW_INCOME: '清寒', MERIT: '績優', OTHER: '其他' }
+
 const items = ref([])
+const appliedIds = ref(new Set())
+const loading = ref(false)
 const error = ref('')
-const statements = reactive({})   // scholarship_id -> 自述
-const applied = reactive({})      // scholarship_id -> true
-const sending = ref(null)
+const notice = ref('')
+
+const selectedId = ref(null)
+const form = reactive({ statement: '', contact_phone: '', address: '', household_status: '', academic_note: '' })
+
+const isStudent = computed(() => auth.role === 'STUDENT')
+function fmtDate(t) { return t ? new Date(t).toLocaleString('zh-TW') : '無期限' }
+function hasApplied(id) { return appliedIds.value.has(id) }
 
 async function load() {
-  error.value = ''
+  loading.value = true; error.value = ''
   try {
-    const { data } = await listScholarships({ only_open: true })
-    items.value = data
+    const [sch, mine] = await Promise.all([
+      listScholarships({ only_open: true }),
+      listMyApplications(),
+    ])
+    items.value = sch.data
+    appliedIds.value = new Set(mine.data.map((a) => a.scholarship_id))
   } catch (e) {
-    error.value = e.response?.data?.detail || '載入失敗'
+    error.value = e?.response?.data?.detail || '載入失敗'
+  } finally {
+    loading.value = false
   }
 }
+
+function openForm(s) {
+  selectedId.value = s.scholarship_id
+  Object.assign(form, { statement: '', contact_phone: '', address: '', household_status: '', academic_note: '' })
+  notice.value = ''; error.value = ''
+}
+function closeForm() { selectedId.value = null }
 
 async function submit(s) {
-  error.value = ''
-  sending.value = s.scholarship_id
+  error.value = ''; notice.value = ''
+  if (!form.statement.trim()) { error.value = '請填寫申請理由'; return }
   try {
-    await applyApi({ scholarship_id: s.scholarship_id, statement: statements[s.scholarship_id] || null })
-    applied[s.scholarship_id] = true
+    await apply({
+      scholarship_id: s.scholarship_id,
+      statement: form.statement,
+      contact_phone: form.contact_phone || null,
+      address: form.address || null,
+      household_status: form.household_status || null,
+      academic_note: form.academic_note || null,
+    })
+    appliedIds.value = new Set([...appliedIds.value, s.scholarship_id])
+    selectedId.value = null
+    notice.value = `已送出「${s.name}」的申請`
   } catch (e) {
-    error.value = e.response?.data?.detail || '申請失敗'
-  } finally {
-    sending.value = null
+    error.value = e?.response?.data?.detail || '申請失敗'
   }
-}
-
-function fmtDeadline(d) {
-  if (!d) return '不限'
-  return new Date(d).toLocaleString('zh-TW', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 onMounted(() => {
   if (!auth.isLoggedIn) return router.push('/login')
-  if (auth.role !== 'STUDENT') {
-    error.value = '此頁僅供學生申請'
-    return
-  }
-  load()
+  if (isStudent.value) load()
 })
 </script>
 
 <template>
   <main class="page">
-    <header class="bar">
-      <RouterLink to="/">← 首頁</RouterLink>
-      <h1>申請獎學金</h1>
-      <RouterLink to="/sas/applications" class="right">我的申請進度 →</RouterLink>
-    </header>
+    <h1>瀏覽 / 申請獎學金</h1>
+    <p v-if="!isStudent" class="warn">此功能僅限學生帳號。</p>
 
-    <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="auth.role === 'STUDENT' && !items.length" class="empty">目前沒有可申請的獎學金。</p>
+    <template v-else>
+      <section class="me">
+        <strong>申請人資料</strong>
+        <span>姓名：{{ auth.user?.name }}</span>
+        <span>學號：{{ auth.user?.account }}</span>
+        <span>系所：{{ auth.user?.department || '—' }}</span>
+        <span>GPA：{{ auth.user?.gpa ?? '—' }}</span>
+        <RouterLink class="mini" to="/sas/profile">修改個人資料</RouterLink>
+      </section>
 
-    <div class="cards" v-if="auth.role === 'STUDENT'">
-      <article v-for="s in items" :key="s.scholarship_id" class="card">
-        <h3>{{ s.name }}</h3>
-        <p class="meta">{{ s.unit_name || ('單位#' + s.unit_id) }} · {{ s.year }} 年度</p>
-        <p class="amount">NT$ {{ s.amount.toLocaleString() }}　名額 {{ s.quota }}</p>
-        <p class="cond">最低 GPA：{{ s.min_gpa ?? '不限' }}　截止：{{ fmtDeadline(s.deadline) }}</p>
-        <p v-if="s.description" class="desc">{{ s.description }}</p>
+      <p v-if="notice" class="notice">{{ notice }}</p>
+      <p v-if="error" class="error">{{ error }}</p>
 
-        <template v-if="applied[s.scholarship_id]">
-          <p class="ok">✅ 已送出申請，請至「我的申請進度」查看。</p>
-        </template>
-        <template v-else>
-          <textarea v-model="statements[s.scholarship_id]" rows="2" placeholder="申請理由 / 自述（選填）" />
-          <button class="primary" :disabled="sending === s.scholarship_id" @click="submit(s)">
-            {{ sending === s.scholarship_id ? '送出中…' : '申請' }}
-          </button>
-        </template>
-      </article>
-    </div>
+      <p v-if="loading">載入中…</p>
+      <p v-else-if="items.length === 0" class="muted">目前沒有開放中的獎學金。</p>
+
+      <div v-else class="list">
+        <article v-for="s in items" :key="s.scholarship_id" class="sch">
+          <h3>{{ s.name }}</h3>
+          <p class="meta">
+            {{ s.unit_name || '—' }}｜{{ CAT_LABEL[s.category] || s.category }}｜金額 {{ s.amount }}｜名額 {{ s.quota }}
+            <span v-if="s.min_gpa"> ｜最低GPA {{ s.min_gpa }}</span>
+          </p>
+          <p class="desc" v-if="s.description">{{ s.description }}</p>
+          <p class="deadline">截止：{{ fmtDate(s.deadline) }}</p>
+
+          <button v-if="hasApplied(s.scholarship_id)" class="applied" disabled>已申請</button>
+          <button v-else-if="selectedId !== s.scholarship_id" class="primary" @click="openForm(s)">填寫申請表</button>
+
+          <div v-if="selectedId === s.scholarship_id" class="apply-form">
+            <label>申請理由 / 自述 *<textarea v-model="form.statement" rows="3" placeholder="請說明申請動機與資格"></textarea></label>
+            <div class="two">
+              <label>聯絡電話<input v-model="form.contact_phone" /></label>
+              <label>通訊地址<input v-model="form.address" /></label>
+            </div>
+            <label>家庭狀況<textarea v-model="form.household_status" rows="2"></textarea></label>
+            <label>在學成績 / 排名說明<textarea v-model="form.academic_note" rows="2"></textarea></label>
+            <div class="actions">
+              <button class="primary" @click="submit(s)">送出申請</button>
+              <button class="ghost" @click="closeForm">取消</button>
+            </div>
+          </div>
+        </article>
+      </div>
+    </template>
   </main>
 </template>
 
 <style scoped>
-.page { max-width: 900px; margin: 4vh auto; padding: 0 16px; font-family: system-ui, sans-serif; }
-.bar { display: flex; align-items: center; gap: 16px; }
-.bar a { color: #2b6cb0; text-decoration: none; }
-.right { margin-left: auto; }
+.page { max-width: 820px; margin: 28px auto; padding: 0 16px; }
 h1 { font-size: 22px; }
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
-.card { border: 1px solid #e3e3e3; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
-h3 { margin: 0 0 6px; font-size: 16px; }
-.meta { color: #666; font-size: 13px; margin: 2px 0; }
-.amount { font-weight: 700; margin: 4px 0; }
-.cond { font-size: 13px; color: #555; margin: 2px 0; }
-.desc { font-size: 13px; color: #444; margin: 8px 0; }
-textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; margin: 8px 0; }
-.primary { padding: 9px 18px; border: none; border-radius: 8px; background: #2b6cb0; color: #fff; cursor: pointer; }
-.primary:disabled { opacity: .6; }
-.error { color: #c0392b; }
-.ok { color: #1a7f37; font-size: 14px; }
-.empty { color: #888; }
+h3 { margin: 0 0 4px; font-size: 17px; }
+.me { background: #ebf4ff; border: 1px solid #bee3f8; border-radius: 12px; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; font-size: 14px; color: #2c5282; margin-bottom: 16px; }
+.mini { font-size: 13px; }
+.list { display: flex; flex-direction: column; gap: 14px; }
+.sch { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; }
+.meta { color: #4a5568; font-size: 14px; }
+.desc { color: #2d3748; }
+.deadline { color: #718096; font-size: 13px; }
+.primary { background: #2b6cb0; color: #fff; border: none; padding: 9px 16px; border-radius: 8px; cursor: pointer; }
+.ghost { background: #edf2f7; border: none; padding: 9px 16px; border-radius: 8px; cursor: pointer; }
+.applied { background: #e2e8f0; color: #718096; border: none; padding: 9px 16px; border-radius: 8px; cursor: not-allowed; }
+.apply-form { margin-top: 14px; border-top: 1px dashed #e2e8f0; padding-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.apply-form label { display: flex; flex-direction: column; font-size: 13px; color: #4a5568; gap: 4px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+input, textarea { padding: 8px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 14px; font-family: inherit; }
+.actions { display: flex; gap: 8px; }
+.muted { color: #a0aec0; }
+.notice { color: #22732f; }
+.error { color: #c53030; }
+.warn { color: #c05621; }
 </style>

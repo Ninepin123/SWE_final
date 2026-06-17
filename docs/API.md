@@ -71,11 +71,11 @@
 
 ## RAS 審查與核發
 
-### GET /api/ras/applications?scholarship_id=  （僅 REVIEWER / ADMIN）
+### GET /api/ras/applications?scholarship_id=  （僅 REVIEWER；v2 起移除 ADMIN）
 - 預設依申請人 GPA 由高到低排序。
 - Response：`ReviewApplicationOut[] = { application_id, student_id, student_name, scholarship_id, scholarship_name, gpa, status, statement, created_at }`
 
-### POST /api/ras/applications/{id}/decision  （僅 REVIEWER / ADMIN）
+### POST /api/ras/applications/{id}/decision  （僅 REVIEWER；v2 起移除 ADMIN）
 - Request：`{ "result": "APPROVED" | "REJECTED" | "NEED_SUPPLEMENT", "comment": "..." }`
 - 行為：寫入一筆審查紀錄，並透過 SAS 介面更新該申請案狀態。
 - Response：`{ "detail": "審查完成", "application_id": 1, "result": "APPROVED" }`
@@ -84,8 +84,51 @@
 
 ## TRS 教師推薦
 
-（v1 尚未實作，後續版本補上。）
+（v2 已實作，詳見下方「v2 變更與新增 → TRS」。）
 
 ## NCS 通知與溝通
 
-（v1 尚未實作，後續版本補上。）
+（v2 已實作，詳見下方「v2 變更與新增 → NCS」。）
+
+---
+
+# v2 變更與新增（依審查回饋）
+
+> v2 修正了審查權限、補齊帳號/獎學金的修改與刪除、新增申請表欄位與學生個人資料維護，
+> 並實作 TRS 推薦信與 NCS 通知/公告，審查改為僅 REVIEWER 並會留下紀錄。
+
+## AAS（變更/新增）
+- **GET /api/aas/teachers**（任何登入者）：老師清單 `TeacherOut[] = { user_id, name, department }`，給學生邀請推薦用。
+- **PUT /api/aas/users/{id}**（僅 ADMIN）：修改帳號。Request 為 `UserUpdate`（只送要改的欄位；`password` 留空表示不改）。
+- **DELETE /api/aas/users/{id}**（僅 ADMIN）：刪除帳號；若已有關聯資料回 409（建議改為停用 `status=DISABLED`）。
+- **GET /api/aas/audit-logs**（僅 ADMIN）：稽核紀錄 `AuditLogOut[] = { log_id, actor_id, actor_name, action, target_type, target_id, detail, created_at }`。
+- `UserOut` 增加 `email, unit_id, department, gpa, status`。
+
+## SMS（新增）
+- **PUT /api/sms/scholarships/{id}**（SPONSOR/ADMIN）：修改獎學金（含 `status` OPEN/CLOSED）。獎助單位僅能改自己單位的。
+- **DELETE /api/sms/scholarships/{id}**（SPONSOR/ADMIN）：刪除；若已有申請回 409（可改為將狀態設為 CLOSED）。
+
+## SAS（變更/新增）
+- 申請表（`POST /api/sas/applications`）新增欄位：`statement(申請理由), contact_phone, address, household_status, academic_note`。
+- 申請成功會透過 NCS 發送通知給學生。
+- **GET /api/sas/profile**（僅 STUDENT）：`ProfileOut`（身分資料唯讀 + 可編輯欄位）。
+- **PUT /api/sas/profile**（僅 STUDENT）：更新 `contact_phone, address, emergency_contact_name, emergency_contact_phone`（學號/姓名/GPA 不可改）。
+
+## RAS（變更）
+- 兩支端點改為 **僅 REVIEWER**（移除 ADMIN）。
+- `GET /api/ras/applications` 回傳加入：完整申請表欄位、`recommendations[]`（已送出的推薦信內容）、以及最近一次審查紀錄 `reviewer_name / review_result / review_comment / reviewed_at`。
+- `POST .../decision` 會寫入審查紀錄並通知學生審查結果。
+
+## TRS 教師推薦（新增實作）
+- **POST /api/trs/recommendations**（STUDENT）：`{ application_id, teacher_id }` 邀請老師；通知該老師。
+- **GET /api/trs/recommendations/student**（STUDENT）：自己各申請的推薦狀態（**不含內容**，隱私）。
+- **GET /api/trs/recommendations/teacher**（TEACHER）：被指派的推薦邀請（含內容）。
+- **PUT /api/trs/recommendations/{rec_id}**（TEACHER）：`{ content, submit }`，`submit=true` 送出（通知學生），否則存草稿。
+- 狀態：`REQUESTED`(已邀請) / `DRAFT`(撰寫中) / `SUBMITTED`(已送出)。
+
+## NCS 通知與溝通（新增實作）
+- **GET /api/ncs/notifications**（登入者）：我的通知 `NotificationOut[]`。
+- **GET /api/ncs/notifications/unread_count**（登入者）：`{ count }`（導覽列鈴鐺用）。
+- **POST /api/ncs/notifications/{id}/read**（登入者）：標記已讀。
+- **GET /api/ncs/announcements**（登入者）：公告列表。
+- **POST /api/ncs/announcements**（僅 ADMIN）：發布公告 `{ title, body }`。
