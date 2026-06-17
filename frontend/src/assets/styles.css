@@ -1,0 +1,519 @@
+/* ============================================================
+   NUKSAMS 設計系統 — 「印 / The Conferral」
+   獎助學金的核心是一個制度行為：學術單位「核定」一筆獎助、並「留存紀錄」。
+   臺灣公文體系由一枚紅色印信驗證此行為。整套介面因此被裝扮為
+   「一份裝在牛皮卷宗裡的正式紀錄」：牛皮紙外框、墨色結構、白色內頁，
+   唯一的簽名元素是一枚硃砂印。
+   改色只需改 :root 變數。
+   ============================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* —— 字體角色 ——
+     sans：密集 UI（表格、表單）主力
+     serif：標題與大數字（宋體＝公文與典籍的字體）
+     mono：學號、申請編號、日期等「編號」性質的參照碼 */
+  --font-sans: Inter, "Noto Sans TC", "Microsoft JhengHei", system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif: "Spectral", "Noto Serif TC", "Songti TC", "Microsoft JhengHei", Georgia, serif;
+  --font-mono: "IBM Plex Mono", "Noto Sans TC", ui-monospace, "SFMono-Regular", monospace;
+
+  /* —— 主色：硯墨青 jade —— 所有操作、連結、焦點 —— */
+  --primary: #3d6a55;
+  --primary-strong: #2f5742;
+  --primary-soft: #e3ece6;
+  --primary-tint: #eef4f0;
+  --primary-ring: rgba(61, 106, 85, 0.26);
+
+  /* —— 簽名色：硃砂印 cinnabar —— 僅用於印記、核定戳、登入浮水印等典禮性時刻 —— */
+  --seal: #bb3b2a;
+  --seal-strong: #99291b;
+  --seal-soft: #f5e2dc;
+
+  /* —— 輔色：赭金 brass —— 金額／榮譽／補件提醒 —— */
+  --gold: #8a6a2c;
+  --gold-soft: #f1e7cf;
+
+  /* —— 語意色（暖調）—— */
+  --success: #46774e;
+  --success-soft: #e6efe0;
+  --warning: #8a6a2c;
+  --warning-soft: #f1e7cf;
+  --danger: #9a3325;
+  --danger-soft: #f2ded8;
+  --info: #3a5f86;
+  --info-soft: #e4ebf3;
+
+  /* —— 中性表面（暖紙階）——
+     paper：工作區「卷宗」底色；surface：白色「內頁」 */
+  --paper: #efe7d4;
+  --surface: #fdfbf6;
+  --surface-muted: #f5efe1;
+  --surface-sunken: #ebe3d1;
+  --line: #e4dcc8;
+  --line-strong: #d2c8ad;
+
+  /* —— 文字（暖墨）—— */
+  --text: #23201a;
+  --text-secondary: #5b5446;
+  --muted: #6f6655;
+
+  /* —— 圓角 —— */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* —— 陰影（暖墨）—— */
+  --shadow-xs: 0 1px 2px rgba(40, 33, 22, 0.05);
+  --shadow-sm: 0 1px 3px rgba(40, 33, 22, 0.07), 0 1px 2px rgba(40, 33, 22, 0.04);
+  --shadow-md: 0 5px 16px rgba(40, 33, 22, 0.09), 0 2px 5px rgba(40, 33, 22, 0.05);
+  --shadow-lg: 0 16px 38px rgba(40, 33, 22, 0.16), 0 5px 14px rgba(40, 33, 22, 0.08);
+
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: var(--paper);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  margin: 0;
+  background: var(--paper);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-family: var(--font-serif);
+  color: var(--text);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+h1 { font-size: 27px; letter-spacing: -0.005em; }
+h2 { font-size: 21px; }
+h3 { font-size: 17px; }
+h4 { font-size: 15px; }
+
+p { margin: 0; }
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--primary-strong);
+}
+
+strong {
+  font-weight: 650;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+
+/* 鍵盤焦點：全域可見的青色描邊（無障礙底線）*/
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* 尊重減少動態偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
+   簽名元素：硃砂印（seal/chop）
+   紅底白字、內嵌白色雙線框，模擬公文印信。
+   ============================================================ */
+
+.seal {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--seal);
+  color: #fdf3ee;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  line-height: 1;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(253, 243, 238, 0.55),
+    inset 0 0 0 3.5px var(--seal);
+}
+
+.seal--watermark {
+  width: 248px;
+  height: 248px;
+  border-radius: 18px;
+  font-size: 150px;
+  color: rgba(226, 104, 68, 0.52);
+  background: transparent;
+  box-shadow:
+    inset 0 0 0 3px rgba(226, 104, 68, 0.46),
+    inset 0 0 0 9px rgba(226, 104, 68, 0.24);
+  transform: rotate(-4deg);
+}
+
+/* ============================================================
+   頁面骨架 + 標題
+   ============================================================ */
+
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 30px 22px 64px;
+}
+
+.page-head {
+  margin-bottom: 22px;
+}
+
+.page-head h1 {
+  font-size: 26px;
+}
+
+.page-head p {
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.eyebrow::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 1px;
+  background: var(--seal);
+}
+
+.muted-text {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   卡片
+   ============================================================ */
+
+.card {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.card__head h2 {
+  font-size: 18px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+  gap: 16px;
+}
+
+/* ============================================================
+   按鈕
+   ============================================================ */
+
+.btn,
+.primary-button,
+.secondary-button,
+.danger-button,
+.ghost-button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease;
+}
+
+.btn:disabled,
+.primary-button:disabled,
+.secondary-button:disabled,
+.danger-button:disabled,
+.ghost-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn,
+.primary-button {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: var(--shadow-xs);
+}
+
+.btn:hover,
+.primary-button:hover {
+  background: var(--primary-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.secondary-button {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--text-secondary);
+}
+
+.secondary-button:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-tint);
+}
+
+.ghost-button {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.ghost-button:hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.danger-button {
+  border-color: rgba(154, 51, 37, 0.24);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.danger-button:hover {
+  background: rgba(154, 51, 37, 0.16);
+}
+
+/* ============================================================
+   表單
+   ============================================================ */
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+textarea {
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-ring);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background: var(--surface-muted);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.form-error,
+.error {
+  padding: 10px 12px;
+  border: 1px solid rgba(154, 51, 37, 0.28);
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ============================================================
+   狀態徽章（實心藥丸）
+   ============================================================ */
+
+.status-badge,
+.badge-pill {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 3px 11px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-badge::before,
+.badge-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-badge--success { background: var(--success-soft); color: var(--success); }
+.status-badge--warning { background: var(--warning-soft); color: var(--warning); }
+.status-badge--danger  { background: var(--danger-soft);  color: var(--danger); }
+.status-badge--info    { background: var(--info-soft);    color: var(--info); }
+.status-badge--muted   { background: var(--surface-sunken); color: var(--muted); }
+.status-badge--gold    { background: var(--gold-soft);    color: var(--gold); }
+
+/* ============================================================
+   資料表格
+   ============================================================ */
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+table.data-table,
+.card table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.data-table thead th {
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.data-table tbody tr {
+  transition: background 0.1s ease;
+}
+
+.data-table tbody tr:hover {
+  background: var(--primary-tint);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ============================================================
+   空狀態
+   ============================================================ */
+
+.empty-state {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  min-height: 240px;
+  padding: 36px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  text-align: center;
+  color: var(--muted);
+}

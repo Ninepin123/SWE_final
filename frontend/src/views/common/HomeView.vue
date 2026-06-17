@@ -38,14 +38,18 @@ const tiles = computed(() => {
 </script>
 
 <template>
-  <main class="home">
-    <h1>NUKSAMS 高雄大學獎(助)學金申請與管理系統</h1>
-    <p class="hello">你好，{{ auth.user?.name }}（{{ ROLE_LABEL[auth.role] || auth.role }}）</p>
+  <main class="home page">
+    <header class="page-head">
+      <p class="eyebrow">主控台</p>
+      <h1>你好，{{ auth.user?.name }}</h1>
+      <p>以{{ ROLE_LABEL[auth.role] || auth.role }}身分登入。以下是你目前可進行的作業。</p>
+    </header>
 
     <div class="grid">
       <RouterLink v-for="t in tiles" :key="t.to" :to="t.to" class="tile">
         <span class="tile-title">{{ t.text }}</span>
         <span class="tile-desc">{{ t.desc }}</span>
+        <span class="tile-go" aria-hidden="true">→</span>
       </RouterLink>
     </div>
 
@@ -54,14 +58,24 @@ const tiles = computed(() => {
 </template>
 
 <style scoped>
-.home { max-width: 1000px; margin: 32px auto; padding: 0 16px; }
-h1 { font-size: 22px; margin-bottom: 4px; }
-.hello { color: #4a5568; margin-top: 0; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin: 18px 0; }
-.tile { display: flex; flex-direction: column; gap: 6px; padding: 18px; border: 1px solid #e2e8f0; border-radius: 14px; text-decoration: none; background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, .04); transition: border-color .15s, transform .15s; }
-.tile:hover { border-color: #2b6cb0; transform: translateY(-2px); }
-.tile-title { color: #2b6cb0; font-weight: 700; font-size: 16px; }
-.tile-desc { color: #718096; font-size: 13px; }
-.note { color: #a0aec0; font-size: 13px; margin-top: 24px; }
-code { background: #edf2f7; padding: 1px 5px; border-radius: 4px; color: #2d3748; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.tile:hover { border-color: var(--primary); box-shadow: var(--shadow-sm); transform: translateY(-2px); }
+.tile-title { color: var(--text); font-family: var(--font-serif); font-weight: 600; font-size: 18px; }
+.tile-desc { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.tile-go { position: absolute; top: 18px; right: 18px; color: var(--primary); font-size: 16px; opacity: 0; transition: opacity 0.15s ease, transform 0.15s ease; }
+.tile:hover .tile-go { opacity: 1; transform: translateX(2px); }
+.note { color: var(--muted); font-size: 13px; margin-top: 26px; }
 </style>
