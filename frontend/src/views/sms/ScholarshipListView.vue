@@ -75,7 +75,8 @@ onMounted(async () => {
         <div class="scholarship-card__facts">
           <span>{{ formatMoney(item.amount) }}</span>
           <span>剩餘 {{ item.seatsLeft }} / {{ item.quota }} 名</span>
-          <span>截止 {{ item.deadline }}</span>
+          <span v-if="item.startDate">{{ item.startDate.split('T')[0] }} ~ {{ item.deadline.split('T')[0] }}</span>
+          <span v-else>截止 {{ item.deadline?.split('T')[0] || item.deadline }}</span>
         </div>
 
         <div class="tag-list">
@@ -87,9 +88,21 @@ onMounted(async () => {
             <dt>GPA 門檻</dt>
             <dd>{{ item.criteria.minGpa }}</dd>
           </div>
-          <div>
+          <div v-if="item.criteria.departments?.length && item.criteria.departments[0] !== '不限科系'">
             <dt>適用科系</dt>
             <dd>{{ item.criteria.departments.join('、') }}</dd>
+          </div>
+          <div v-if="item.criteria.grades?.length">
+            <dt>適用年級</dt>
+            <dd>{{ item.criteria.grades.join('、') }}</dd>
+          </div>
+          <div v-if="item.criteria.identities?.length">
+            <dt>身分別限制</dt>
+            <dd>{{ item.criteria.identities.join('、') }}</dd>
+          </div>
+          <div v-if="item.criteria.familyStatuses?.length">
+            <dt>家庭狀況限制</dt>
+            <dd>{{ item.criteria.familyStatuses.join('、') }}</dd>
           </div>
           <div>
             <dt>推薦信</dt>

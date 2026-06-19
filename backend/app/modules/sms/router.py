@@ -52,3 +52,35 @@ def delete_scholarship(
     service.delete_scholarship(db, scholarship_id, current)
     aas_service.write_audit(db, current.user_id, "DELETE_SCHOLARSHIP", "scholarship", scholarship_id, f"刪除獎學金 #{scholarship_id}")
     return {"detail": "已刪除獎學金"}
+
+
+# --- Options (Category & Tag) ---
+from app.modules.sms.schemas import OptionCreate, OptionOut
+
+@router.get("/options", response_model=list[OptionOut])
+def list_options(type: str | None = None, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    return service.list_options(db, type_=type)
+
+@router.post("/options", response_model=OptionOut, status_code=status.HTTP_201_CREATED)
+def create_option(
+    body: OptionCreate, db: Session = Depends(get_db), current: User = Depends(require_roles("ADMIN"))
+):
+    result = service.create_option(db, body)
+    aas_service.write_audit(db, current.user_id, "CREATE_OPTION", "scholarship_option", result["id"], f"新增選項「{result['name']}」")
+    return result
+
+@router.put("/options/{option_id}", response_model=OptionOut)
+def update_option(
+    option_id: int, body: OptionCreate, db: Session = Depends(get_db), current: User = Depends(require_roles("ADMIN"))
+):
+    result = service.update_option(db, option_id, body)
+    aas_service.write_audit(db, current.user_id, "UPDATE_OPTION", "scholarship_option", option_id, f"修改選項 #{option_id}")
+    return result
+
+@router.delete("/options/{option_id}")
+def delete_option(
+    option_id: int, db: Session = Depends(get_db), current: User = Depends(require_roles("ADMIN"))
+):
+    service.delete_option(db, option_id)
+    aas_service.write_audit(db, current.user_id, "DELETE_OPTION", "scholarship_option", option_id, f"刪除選項 #{option_id}")
+    return {"detail": "已刪除選項"}

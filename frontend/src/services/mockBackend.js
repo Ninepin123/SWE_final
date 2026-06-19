@@ -142,6 +142,7 @@ function getSeedState() {
         amount: 30000,
         quota: 12,
         usedQuota: 4,
+        startDate: '2026-06-01',
         deadline: '2026-07-30',
         status: 'OPEN',
         tags: ['成績優良', '校內'],
@@ -162,6 +163,7 @@ function getSeedState() {
         amount: 20000,
         quota: 8,
         usedQuota: 2,
+        startDate: '2026-05-15',
         deadline: '2026-07-10',
         status: 'OPEN',
         tags: ['清寒', '資訊學院'],
@@ -182,6 +184,7 @@ function getSeedState() {
         amount: 50000,
         quota: 5,
         usedQuota: 5,
+        startDate: '2026-05-01',
         deadline: '2026-06-30',
         status: 'CLOSED',
         tags: ['企業', '實習'],
@@ -633,6 +636,60 @@ export async function updateScholarship(scholarshipId, data) {
 export async function deleteScholarship(scholarshipId) {
   const state = getState()
   state.scholarships = state.scholarships.filter((item) => item.id !== scholarshipId)
+  saveState(state)
+  return delay(true)
+}
+
+export async function getOptions(params = {}) {
+  const state = getState()
+  let items = state.options || [
+    { id: 1, type: 'CATEGORY', name: '校內獎學金' },
+    { id: 2, type: 'CATEGORY', name: '政府獎學金' },
+    { id: 3, type: 'CATEGORY', name: '企業贊助' },
+    { id: 4, type: 'CATEGORY', name: '清寒獎助' },
+    { id: 5, type: 'CATEGORY', name: '成績優良' },
+    { id: 6, type: 'CATEGORY', name: '其他' },
+    { id: 7, type: 'TAG', name: '急難救助' },
+    { id: 8, type: 'TAG', name: '限理工學院' }
+  ]
+  if (params.type) {
+    items = items.filter(i => i.type === params.type)
+  }
+  return delay(items)
+}
+
+export async function createOption(data) {
+  const state = getState()
+  if (!state.options) {
+    state.options = [
+      { id: 1, type: 'CATEGORY', name: '校內獎學金' },
+      { id: 2, type: 'CATEGORY', name: '政府獎學金' },
+      { id: 3, type: 'CATEGORY', name: '企業贊助' }
+    ]
+  }
+  const id = Date.now()
+  const opt = { id, type: data.type, name: data.name }
+  state.options.push(opt)
+  saveState(state)
+  return delay(opt)
+}
+
+export async function updateOption(id, data) {
+  const state = getState()
+  if (!state.options) return delay(null)
+  const index = state.options.findIndex(i => i.id === id)
+  if (index !== -1) {
+    state.options[index] = { ...state.options[index], name: data.name, type: data.type }
+    saveState(state)
+    return delay(state.options[index])
+  }
+  return delay(null)
+}
+
+export async function deleteOption(id) {
+  const state = getState()
+  if (!state.options) return delay(true)
+  state.options = state.options.filter(i => i.id !== id)
   saveState(state)
   return delay(true)
 }

@@ -37,3 +37,27 @@ export function deleteScholarship(scholarshipId) {
     mock.deleteScholarship(scholarshipId),
   )
 }
+
+export function getOptions(type) {
+  return withApiFallback(() => http.get('/sms/options', { params: type ? { type } : undefined }), () =>
+    mock.getOptions(type ? { type } : {})
+  )
+}
+
+export function createOption(data) {
+  return withApiFallback(() => http.post('/sms/options', data), () =>
+    mock.createOption(data)
+  )
+}
+
+export function updateOption(id, data) {
+  return withApiFallback(() => http.put(`/sms/options/${id}`, data), () =>
+    mock.updateOption(id, data)
+  )
+}
+
+export function deleteOption(id) {
+  return withApiFallback(() => http.delete(`/sms/options/${id}`), () =>
+    mock.deleteOption(id)
+  )
+}
