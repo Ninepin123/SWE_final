@@ -586,15 +586,30 @@ def submit_application(db: Session, student: User, application_id: int) -> dict:
         to_status="UNDER_REVIEW",
         detail="正式送出申請",
     )
-    db.commit()
-    db.refresh(app)
     ncs_service.create_notification(
         db,
         student.user_id,
         "申請已送出",
         f"你已成功申請「{scholarship.name}」，目前狀態：審核中。",
-        commit=True,
+        commit=False,
     )
+    reviewers = db.scalars(
+        select(User).where(
+            User.unit_id == scholarship.unit_id,
+            User.role.in_(("SPONSOR", "REVIEWER")),
+            User.status == "ACTIVE",
+        )
+    ).all()
+    for reviewer in reviewers:
+        ncs_service.create_notification(
+            db,
+            reviewer.user_id,
+            "收到新的獎學金申請",
+            f"「{scholarship.name}」收到來自 {student.name} 的申請案 #{application_id}。",
+            commit=False,
+        )
+    db.commit()
+    db.refresh(app)
     return _to_out(db, app)
 
 

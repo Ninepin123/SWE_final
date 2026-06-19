@@ -127,6 +127,12 @@ def complete_payload(scholarship_id):
 def test_student_can_create_update_and_submit_draft(client, db_session):
     student = create_student(db_session, "student01")
     scholarship = create_scholarship(db_session)
+    reviewer = create_user(
+        db_session,
+        "reviewer-for-submit",
+        role="REVIEWER",
+        unit_id=scholarship.unit_id,
+    )
 
     create_response = client.post(
         "/api/sas/applications",
@@ -171,6 +177,11 @@ def test_student_can_create_update_and_submit_draft(client, db_session):
         select(Notification).where(Notification.user_id == student.user_id)
     )
     assert notification is not None
+    reviewer_notification = db_session.scalar(
+        select(Notification).where(Notification.user_id == reviewer.user_id)
+    )
+    assert reviewer_notification is not None
+    assert reviewer_notification.title == "收到新的獎學金申請"
 
 
 def test_incomplete_draft_cannot_be_submitted(client, db_session):
