@@ -57,6 +57,14 @@
 
 ## SAS 學生申請
 
+### GET /api/sas/scholarships/available  （僅 STUDENT）
+- 依目前登入學生的 `department` 與 `gpa` 判斷資格。
+- Query：`keyword?`, `category?`, `department?`, `deadline_before?`, `eligible_only?`
+- Response：`ScholarshipEligibilityOut[]`
+- 每筆包含 `remaining_quota`, `already_applied`, `can_apply`, `ineligibility_reasons`。
+- 不可申請原因可能包含：未開放、已截止、名額已滿、GPA 未達、科系不符、資料不足或已申請。
+- 目前 SMS 尚未提供必要文件資料結構，因此 `required_documents` 暫時回傳空陣列。
+
 ### POST /api/sas/applications  （僅 STUDENT）
 - 檢查：獎學金開放中、未截止、GPA 達門檻、未重複申請。
 - Request：`{ "scholarship_id": 1, "statement": "..." }`

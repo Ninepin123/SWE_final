@@ -58,3 +58,25 @@ class ProfileUpdate(BaseModel):
         if "@" not in value or value.startswith("@") or value.endswith("@"):
             raise ValueError("Email 格式不正確")
         return value
+
+
+class ScholarshipEligibilityOut(BaseModel):
+    scholarship_id: int
+    name: str
+    year: int
+    amount: int
+    quota: int
+    remaining_quota: int
+    min_gpa: float | None = None
+    department_limit: str | None = None
+    category: str
+    description: str | None = None
+    deadline: datetime | None = None
+    status: str
+    unit_id: int
+    unit_name: str | None = None
+    contact_email: str | None = None
+    required_documents: list[str] = Field(default_factory=list)
+    already_applied: bool
+    can_apply: bool
+    ineligibility_reasons: list[str]

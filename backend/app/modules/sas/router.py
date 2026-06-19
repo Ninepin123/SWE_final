@@ -1,6 +1,8 @@
 """SAS 學生申請 — API 路由
 需求書：Chapter 6。範圍：線上申請（含申請表）、查詢自己的申請進度、維護個人資料。
 """
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
@@ -8,9 +10,36 @@ from app.core.database import get_db
 from app.modules.aas.models import User
 from app.modules.aas.security import require_roles
 from app.modules.sas import service
-from app.modules.sas.schemas import ApplicationCreate, ApplicationOut, ProfileOut, ProfileUpdate
+from app.modules.sas.schemas import (
+    ApplicationCreate,
+    ApplicationOut,
+    ProfileOut,
+    ProfileUpdate,
+    ScholarshipEligibilityOut,
+)
 
 router = APIRouter(prefix="/api/sas", tags=["SAS 學生申請"])
+
+
+@router.get("/scholarships/available", response_model=list[ScholarshipEligibilityOut])
+def available_scholarships(
+    keyword: str | None = None,
+    category: str | None = None,
+    department: str | None = None,
+    deadline_before: datetime | None = None,
+    eligible_only: bool = False,
+    db: Session = Depends(get_db),
+    student: User = Depends(require_roles("STUDENT")),
+):
+    return service.list_scholarships_for_student(
+        db,
+        student,
+        keyword=keyword,
+        category=category,
+        department=department,
+        deadline_before=deadline_before,
+        eligible_only=eligible_only,
+    )
 
 
 @router.post("/applications", response_model=ApplicationOut, status_code=status.HTTP_201_CREATED)

@@ -19,8 +19,28 @@ export function updateProfile(userId, data) {
 }
 
 export function listAvailableScholarships(studentId) {
-  return withApiFallback(() => http.get('/sas/scholarships/available'), () =>
-    mock.listAvailableScholarships(studentId),
+  if (useMockApi) return mock.listAvailableScholarships(studentId)
+  return http.get('/sas/scholarships/available').then((response) =>
+    response.data.map((item) => ({
+      id: item.scholarship_id,
+      title: item.name,
+      year: item.year,
+      amount: item.amount,
+      quota: item.quota,
+      seatsLeft: item.remaining_quota,
+      minGpa: item.min_gpa,
+      departmentLimit: item.department_limit,
+      category: item.category,
+      description: item.description,
+      deadline: item.deadline,
+      status: item.status,
+      sponsor: item.unit_name,
+      contactEmail: item.contact_email,
+      requiredDocs: item.required_documents,
+      alreadyApplied: item.already_applied,
+      canApply: item.can_apply,
+      ineligibilityReasons: item.ineligibility_reasons,
+    })),
   )
 }
 
