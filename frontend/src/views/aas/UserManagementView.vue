@@ -7,7 +7,6 @@ import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import Icon from '@/components/common/Icon.vue'
 import { createUser, deleteUser, listUsers, ROLE_LABELS, updateUser } from '@/api/aas'
-import { useMockApi } from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
@@ -35,7 +34,7 @@ const form = reactive({
 })
 
 const roleOptions = computed(() =>
-  Object.entries(ROLE_LABELS).filter(([role]) => useMockApi || role !== 'RECOMMENDER'),
+  Object.entries(ROLE_LABELS),
 )
 
 const filteredUsers = computed(() => {

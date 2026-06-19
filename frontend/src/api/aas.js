@@ -9,8 +9,6 @@ export const ROLE_LABELS = {
   SPONSOR: '獎助單位人員',
   REVIEWER: '審查人員',
   ADMIN: '系統管理員',
-  // Mock 資料尚未由整合者遷移前保留相容性。
-  RECOMMENDER: '推薦人',
 }
 
 // 範例（骨架測試用，開發開始後可移除）：

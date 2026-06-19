@@ -26,8 +26,12 @@ const quickLinks = computed(() => {
       { label: '管理獎學金', to: '/admin/scholarships' },
       { label: '查看通知', to: '/notifications' },
     ],
-    RECOMMENDER: [
+    TEACHER: [
       { label: '處理推薦信邀請', to: '/recommendations' },
+      { label: '查看通知', to: '/notifications' },
+    ],
+    SPONSOR: [
+      { label: '管理獎學金', to: '/admin/scholarships' },
       { label: '查看通知', to: '/notifications' },
     ],
   }
@@ -59,6 +63,13 @@ const stats = computed(() => {
       { label: '未讀通知', value: summary.value.unread ?? 0 },
     ]
   }
+  if (auth.role === 'SPONSOR') {
+    return [
+      { label: '獎學金', value: summary.value.scholarships ?? 0 },
+      { label: '開放中', value: summary.value.openScholarships ?? 0 },
+      { label: '未讀通知', value: summary.value.unread ?? 0 },
+    ]
+  }
   return [
     { label: '待填推薦信', value: summary.value.pendingRecommendations ?? 0 },
     { label: '已送出推薦', value: summary.value.submittedRecommendations ?? 0 },
@@ -71,7 +82,8 @@ const guidance = computed(() => {
     STUDENT: '從可申請獎學金開始，系統會阻擋重複申請，並在送出後建立推薦信邀請與通知。',
     REVIEWER: '審查工作台會顯示申請文件、推薦信狀態與完整 audit timeline。',
     ADMIN: '管理員只負責帳號與獎學金 CRUD，不提供申請審查入口。',
-    RECOMMENDER: '推薦人只能看到指派給自己的推薦邀請，學生只能看狀態，不會看到內容。',
+    TEACHER: '教師只能看到指派給自己的推薦邀請，學生只能看狀態，不會看到內容。',
+    SPONSOR: '獎助單位人員可管理所屬單位的獎學金資料，且不能修改其他單位的內容。',
   }
   return text[auth.role]
 })

@@ -43,9 +43,9 @@ const roles = [
     icon: 'shield',
   },
   {
-    role: 'RECOMMENDER',
-    title: '推薦人',
-    account: 'mchen',
+    role: 'TEACHER',
+    title: '教師',
+    account: 'teacher',
     subtitle: '接收邀請、撰寫推薦信',
     icon: 'recommend',
   },
