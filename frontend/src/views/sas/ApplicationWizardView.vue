@@ -6,8 +6,16 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 import StepForm from '@/components/common/StepForm.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
-import { getScholarship } from '@/api/sms'
-import { createApplication, getProfile, listMyApplications } from '@/api/sas'
+import {
+  createApplication,
+  getProfile,
+  listApplicationDocuments,
+  listAvailableScholarships,
+  listMyApplications,
+  saveApplicationDocument,
+  submitApplication,
+  updateApplication,
+} from '@/api/sas'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
@@ -16,72 +24,64 @@ const router = useRouter()
 const auth = useAuthStore()
 const toast = useToastStore()
 
-const steps = ['基本資料', '學業與經濟', '推薦人', '文件與聲明', '確認送出']
+const steps = ['聯絡資料', '申請內容', '文字文件', '確認送出']
 const currentStep = ref(0)
 const loading = ref(true)
+const saving = ref(false)
 const submitting = ref(false)
 const error = ref('')
 const scholarship = ref(null)
-const alreadyApplied = ref(false)
+const applicationId = ref(null)
+const existingSubmitted = ref(false)
 
 const form = reactive({
-  personal: {
-    phone: '',
-    address: '',
-  },
-  academics: {
-    gpa: '',
-    credits: '',
-    achievements: '',
-  },
-  finance: {
-    familyStatus: '',
-    monthlyExpense: '',
-  },
-  recommender: {
-    name: '陳明哲',
-    email: 'mchen@nuk.edu.tw',
-    title: '資訊管理學系副教授',
-    relationship: '導師',
-  },
-  documents: [],
+  contact_phone: '',
+  address: '',
+  household_status: '',
+  academic_note: '',
   statement: '',
+  documents: {
+    TRANSCRIPT: {
+      title: '成績單內容',
+      content_text: '',
+    },
+    AUTOBIOGRAPHY: {
+      title: '自傳',
+      content_text: '',
+    },
+    CERTIFICATE: {
+      title: '證明文件說明',
+      content_text: '',
+    },
+  },
 })
 
-const requiredDocs = computed(() => scholarship.value?.requiredDocs ?? [])
+const isDraft = computed(() => !!applicationId.value && !existingSubmitted.value)
+
+function applicationPayload() {
+  return {
+    statement: form.statement.trim() || null,
+    contact_phone: form.contact_phone.trim() || null,
+    address: form.address.trim() || null,
+    household_status: form.household_status.trim() || null,
+    academic_note: form.academic_note.trim() || null,
+  }
+}
 
 function validateStep(step = currentStep.value) {
   error.value = ''
-  if (step === 0 && (!form.personal.phone || !form.personal.address)) {
+  if (step === 0 && (!form.contact_phone.trim() || !form.address.trim())) {
     error.value = '請填寫聯絡電話與通訊地址。'
-  }
-  if (
+  } else if (
     step === 1 &&
-    (!form.academics.gpa ||
-      Number(form.academics.gpa) <= 0 ||
-      !form.finance.familyStatus ||
-      !form.finance.monthlyExpense)
+    (!form.household_status.trim() || form.statement.trim().length < 20)
   ) {
-    error.value = '請填寫 GPA、家庭狀況與每月支出。'
-  }
-  if (step === 2 && scholarship.value?.requireRecommendation) {
-    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.recommender.email)
-    if (
-      !form.recommender.name ||
-      !emailOk ||
-      !form.recommender.title ||
-      !form.recommender.relationship
-    ) {
-      error.value = '請完整填寫推薦人姓名、Email、職稱與關係。'
-    }
-  }
-  if (step === 3) {
-    const missingDocs = requiredDocs.value.filter((doc) => !form.documents.includes(doc))
-    if (missingDocs.length) {
-      error.value = `請確認已備妥：${missingDocs.join('、')}。`
-    } else if (form.statement.trim().length < 20) {
-      error.value = '申請動機至少需 20 個字。'
-    }
+    error.value = '請填寫家庭狀況，且申請理由至少需 20 個字。'
+  } else if (
+    step === 2 &&
+    !Object.values(form.documents).some((document) => document.content_text.trim())
+  ) {
+    error.value = '請至少填寫一份文字文件。'
   }
   return !error.value
 }
@@ -96,51 +96,99 @@ function prevStep() {
   currentStep.value -= 1
 }
 
+async function saveDraft(showMessage = true) {
+  saving.value = true
+  error.value = ''
+  try {
+    const payload = applicationPayload()
+    let saved
+    if (applicationId.value) {
+      saved = await updateApplication(applicationId.value, payload)
+    } else {
+      saved = await createApplication(auth.user?.user_id ?? auth.user?.id, {
+        scholarship_id: scholarship.value.id,
+        ...payload,
+      })
+      applicationId.value = saved.application_id
+    }
+    for (const [documentType, document] of Object.entries(form.documents)) {
+      if (!document.content_text.trim()) continue
+      await saveApplicationDocument(applicationId.value, {
+        document_type: documentType,
+        title: document.title,
+        content_text: document.content_text,
+      })
+    }
+    if (showMessage) toast.success('草稿與文字文件已儲存')
+    return saved
+  } catch (saveError) {
+    error.value = saveError.response?.data?.detail || saveError.message || '草稿儲存失敗'
+    return null
+  } finally {
+    saving.value = false
+  }
+}
+
 async function submit() {
-  if (!validateStep(3)) return
+  if (!validateStep(0) || !validateStep(1) || !validateStep(2)) return
+  if (!window.confirm('正式送出後將無法修改申請資料，確定送出嗎？')) return
   submitting.value = true
   try {
-    await createApplication(auth.user.id, {
-      scholarshipId: scholarship.value.id,
-      form: {
-        personal: { ...form.personal },
-        academics: {
-          gpa: Number(form.academics.gpa),
-          credits: Number(form.academics.credits || 0),
-          achievements: form.academics.achievements,
-        },
-        finance: {
-          familyStatus: form.finance.familyStatus,
-          monthlyExpense: Number(form.finance.monthlyExpense),
-        },
-        statement: form.statement,
-        documents: [...form.documents],
-      },
-      recommender: scholarship.value.requireRecommendation ? { ...form.recommender } : null,
-    })
-    toast.success('申請已送出，推薦信邀請與通知已建立')
+    const saved = await saveDraft(false)
+    if (!saved) return
+    await submitApplication(applicationId.value)
+    toast.success('申請已正式送出')
     router.push('/applications')
   } catch (submitError) {
-    toast.error(submitError.message || '申請送出失敗')
+    error.value =
+      submitError.response?.data?.detail || submitError.message || '申請送出失敗'
   } finally {
     submitting.value = false
   }
 }
 
 onMounted(async () => {
-  const [profile, item, applications] = await Promise.all([
-    getProfile(auth.user.id),
-    getScholarship(route.params.id),
-    listMyApplications(auth.user.id),
-  ])
-  scholarship.value = item
-  alreadyApplied.value = applications.some((application) => application.scholarshipId === item.id)
-  form.personal.phone = profile.phone
-  form.personal.address = profile.address
-  form.academics.gpa = profile.gpa
-  form.academics.credits = profile.credits
-  form.finance.familyStatus = profile.familyStatus
-  loading.value = false
+  try {
+    const userId = auth.user?.user_id ?? auth.user?.id
+    const [profile, scholarships, applications] = await Promise.all([
+      getProfile(userId),
+      listAvailableScholarships(userId),
+      listMyApplications(userId),
+    ])
+    scholarship.value = scholarships.find(
+      (item) => String(item.id) === String(route.params.id),
+    )
+    if (!scholarship.value) throw new Error('找不到獎學金')
+
+    const existing = applications.find(
+      (item) => String(item.scholarship_id ?? item.scholarshipId) === String(route.params.id),
+    )
+    if (existing) {
+      applicationId.value = existing.application_id ?? existing.id
+      existingSubmitted.value = existing.status !== 'DRAFT'
+      Object.assign(form, {
+        contact_phone: existing.contact_phone ?? '',
+        address: existing.address ?? '',
+        household_status: existing.household_status ?? '',
+        academic_note: existing.academic_note ?? '',
+        statement: existing.statement ?? '',
+      })
+      const documents = await listApplicationDocuments(applicationId.value)
+      for (const document of documents) {
+        if (form.documents[document.document_type]) {
+          form.documents[document.document_type].title = document.title
+          form.documents[document.document_type].content_text = document.content_text
+        }
+      }
+    } else {
+      form.contact_phone = profile.contact_phone ?? profile.phone ?? ''
+      form.address = profile.address ?? ''
+    }
+  } catch (loadError) {
+    error.value = loadError.response?.data?.detail || loadError.message || '申請資料載入失敗'
+  } finally {
+    loading.value = false
+  }
 })
 </script>
 
@@ -148,19 +196,19 @@ onMounted(async () => {
   <LoadingSkeleton v-if="loading" :rows="5" />
 
   <EmptyState
-    v-else-if="alreadyApplied"
-    title="你已經申請過此獎學金"
-    description="系統不允許重複申請同一項獎學金，請到我的申請查看狀態。"
+    v-else-if="existingSubmitted"
+    title="這份申請已正式送出"
+    description="正式送出的申請不能再修改，請到我的申請查看目前狀態。"
     icon="archive"
   >
-    <RouterLink class="primary-button" to="/applications">查看狀態</RouterLink>
+    <RouterLink class="primary-button" to="/applications">查看申請狀態</RouterLink>
   </EmptyState>
 
-  <div v-else class="page-grid">
+  <div v-else-if="scholarship" class="page-grid">
     <BaseCard :title="scholarship.title" eyebrow="Application">
       <div class="card-row card-row--between">
         <p class="muted-text">{{ scholarship.description }}</p>
-        <StatusBadge :value="scholarship.status" />
+        <StatusBadge :value="isDraft ? 'DRAFT' : scholarship.status" />
       </div>
       <StepForm :steps="steps" :current="currentStep" />
       <p v-if="error" class="form-error">{{ error }}</p>
@@ -170,81 +218,69 @@ onMounted(async () => {
       <div class="form-grid">
         <label>
           <span>聯絡電話</span>
-          <input v-model="form.personal.phone" type="tel" />
+          <input v-model="form.contact_phone" type="tel" />
         </label>
         <label>
           <span>通訊地址</span>
-          <input v-model="form.personal.address" type="text" />
+          <input v-model="form.address" type="text" />
         </label>
       </div>
     </BaseCard>
 
-    <BaseCard v-if="currentStep === 1" title="學業與經濟狀況">
+    <BaseCard v-if="currentStep === 1" title="申請內容">
       <div class="form-grid">
-        <label>
-          <span>GPA</span>
-          <input v-model="form.academics.gpa" min="0" max="4.3" step="0.01" type="number" />
-        </label>
-        <label>
-          <span>已修學分</span>
-          <input v-model="form.academics.credits" min="0" type="number" />
-        </label>
-        <label>
-          <span>每月支出</span>
-          <input v-model="form.finance.monthlyExpense" min="0" type="number" />
-        </label>
         <label class="form-grid__wide">
           <span>家庭與經濟狀況</span>
-          <textarea v-model="form.finance.familyStatus" rows="4" />
+          <textarea v-model="form.household_status" rows="4" />
         </label>
         <label class="form-grid__wide">
           <span>學業表現或特殊成就</span>
-          <textarea v-model="form.academics.achievements" rows="4" />
+          <textarea v-model="form.academic_note" rows="4" />
+        </label>
+        <label class="form-grid__wide">
+          <span>申請理由</span>
+          <textarea
+            v-model="form.statement"
+            rows="7"
+            placeholder="請說明申請原因、學習計畫與經費用途（至少 20 字）"
+          />
         </label>
       </div>
     </BaseCard>
 
-    <BaseCard v-if="currentStep === 2" title="推薦人資料">
-      <div v-if="scholarship.requireRecommendation" class="form-grid">
-        <label>
-          <span>推薦人姓名</span>
-          <input v-model="form.recommender.name" type="text" />
+    <BaseCard v-if="currentStep === 2" title="確認送出">
+      <div class="form-grid">
+        <label class="form-grid__wide">
+          <span>成績單內容</span>
+          <textarea
+            v-model="form.documents.TRANSCRIPT.content_text"
+            rows="5"
+            placeholder="請以文字整理主要科目、成績、排名或 GPA 說明"
+          />
         </label>
-        <label>
-          <span>推薦人 Email</span>
-          <input v-model="form.recommender.email" type="email" />
+        <label class="form-grid__wide">
+          <span>自傳</span>
+          <textarea
+            v-model="form.documents.AUTOBIOGRAPHY.content_text"
+            rows="7"
+            placeholder="請輸入自傳內容"
+          />
         </label>
-        <label>
-          <span>職稱或單位</span>
-          <input v-model="form.recommender.title" type="text" />
-        </label>
-        <label>
-          <span>與申請人關係</span>
-          <input v-model="form.recommender.relationship" type="text" />
-        </label>
-      </div>
-      <EmptyState
-        v-else
-        title="此獎學金不需要推薦信"
-        description="你可以直接前往下一步確認文件與申請聲明。"
-        icon="check"
-      />
-    </BaseCard>
-
-    <BaseCard v-if="currentStep === 3" title="文件與申請聲明">
-      <div class="check-list">
-        <label v-for="doc in requiredDocs" :key="doc">
-          <input v-model="form.documents" type="checkbox" :value="doc" />
-          <span>{{ doc }}</span>
+        <label class="form-grid__wide">
+          <span>其他證明文件說明</span>
+          <textarea
+            v-model="form.documents.CERTIFICATE.content_text"
+            rows="5"
+            placeholder="請描述相關證明、獎項或經歷"
+          />
         </label>
       </div>
-      <label class="stacked-field">
-        <span>申請動機與說明</span>
-        <textarea v-model="form.statement" rows="7" placeholder="請說明申請原因、學習計畫與經費用途" />
-      </label>
+      <p class="muted-text">
+        目前以文字內容代替實體附件；之後可沿用相同文件類型整合檔案上傳。
+      </p>
     </BaseCard>
 
-    <BaseCard v-if="currentStep === 4" title="確認送出">
+    <BaseCard v-if="currentStep === 3" title="確認送出">
       <dl class="review-list">
         <div>
           <dt>獎學金</dt>
@@ -252,24 +288,39 @@ onMounted(async () => {
         </div>
         <div>
           <dt>聯絡方式</dt>
-          <dd>{{ form.personal.phone }} · {{ form.personal.address }}</dd>
+          <dd>{{ form.contact_phone }} · {{ form.address }}</dd>
         </div>
         <div>
-          <dt>GPA / 學分</dt>
-          <dd>{{ form.academics.gpa }} / {{ form.academics.credits }}</dd>
-        </div>
-        <div v-if="scholarship.requireRecommendation">
-          <dt>推薦人</dt>
-          <dd>{{ form.recommender.name }} · {{ form.recommender.email }}</dd>
+          <dt>家庭狀況</dt>
+          <dd>{{ form.household_status }}</dd>
         </div>
         <div>
-          <dt>文件</dt>
-          <dd>{{ form.documents.join('、') }}</dd>
+          <dt>申請理由</dt>
+          <dd>{{ form.statement }}</dd>
+        </div>
+        <div>
+          <dt>文字文件</dt>
+          <dd>
+            {{
+              Object.values(form.documents).filter((document) => document.content_text.trim())
+                .length
+            }}
+            份
+          </dd>
         </div>
       </dl>
+      <p class="muted-text">正式送出後不能再修改；若尚未完成，可以先儲存草稿。</p>
     </BaseCard>
 
     <div class="form-actions">
+      <button
+        class="secondary-button"
+        type="button"
+        :disabled="saving || submitting"
+        @click="saveDraft"
+      >
+        {{ saving ? '儲存中' : '儲存草稿' }}
+      </button>
       <button
         class="secondary-button"
         type="button"
@@ -287,7 +338,7 @@ onMounted(async () => {
         下一步
       </button>
       <button v-else class="primary-button" type="button" :disabled="submitting" @click="submit">
-        {{ submitting ? '送出中' : '送出申請' }}
+        {{ submitting ? '送出中' : '正式送出' }}
       </button>
     </div>
   </div>

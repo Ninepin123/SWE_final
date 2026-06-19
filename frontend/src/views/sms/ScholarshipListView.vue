@@ -11,17 +11,31 @@ import { useAuthStore } from '@/stores/auth'
 const auth = useAuthStore()
 const loading = ref(true)
 const keyword = ref('')
+const categoryFilter = ref('')
+const eligibilityFilter = ref('')
 const scholarships = ref([])
 
 const filteredScholarships = computed(() => {
   const query = keyword.value.trim().toLowerCase()
-  if (!query) return scholarships.value
   return scholarships.value.filter((item) =>
-    [item.title, item.category, item.sponsor, item.description, ...(item.tags ?? [])]
-      .filter(Boolean)
-      .some((field) => String(field).toLowerCase().includes(query)),
+    (!query ||
+      [item.title, item.category, item.sponsor, item.description]
+        .filter(Boolean)
+        .some((field) => String(field).toLowerCase().includes(query))) &&
+    (!categoryFilter.value || item.category === categoryFilter.value) &&
+    (!eligibilityFilter.value ||
+      (eligibilityFilter.value === 'ELIGIBLE' ? item.canApply : !item.canApply)),
   )
 })
+
+const categoryLabels = {
+  SCHOOL: '校內',
+  GOVERNMENT: '政府',
+  PRIVATE: '民間',
+  LOW_INCOME: '清寒',
+  MERIT: '成績優良',
+  OTHER: '其他',
+}
 
 function formatMoney(value) {
   return new Intl.NumberFormat('zh-TW', {
@@ -32,11 +46,20 @@ function formatMoney(value) {
 }
 
 function isUnavailable(item) {
-  return item.status !== 'OPEN' || item.seatsLeft <= 0
+  return item.canApply === false || item.status !== 'OPEN' || item.seatsLeft <= 0
+}
+
+function formatDate(value) {
+  if (!value) return '未設定'
+  return new Intl.DateTimeFormat('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(value))
 }
 
 onMounted(async () => {
-  scholarships.value = await listAvailableScholarships(auth.user.id)
+  scholarships.value = await listAvailableScholarships(auth.user?.user_id ?? auth.user?.id)
   loading.value = false
 })
 </script>
@@ -48,6 +71,23 @@ onMounted(async () => {
         <label class="search-field">
           <span>搜尋</span>
           <input v-model="keyword" type="search" placeholder="輸入名稱、分類、贊助單位" />
+        </label>
+        <label>
+          <span>分類</span>
+          <select v-model="categoryFilter">
+            <option value="">全部分類</option>
+            <option v-for="(label, value) in categoryLabels" :key="value" :value="value">
+              {{ label }}
+            </option>
+          </select>
+        </label>
+        <label>
+          <span>資格</span>
+          <select v-model="eligibilityFilter">
+            <option value="">全部</option>
+            <option value="ELIGIBLE">符合資格</option>
+            <option value="INELIGIBLE">不符合資格</option>
+          </select>
         </label>
       </div>
     </BaseCard>
@@ -64,7 +104,7 @@ onMounted(async () => {
       <BaseCard v-for="item in filteredScholarships" :key="item.id" class="scholarship-card">
         <div class="card-row card-row--between">
           <div>
-            <p class="eyebrow">{{ item.category }} · {{ item.sponsor }}</p>
+            <p class="eyebrow">{{ categoryLabels[item.category] || item.category }} · {{ item.sponsor }}</p>
             <h2>{{ item.title }}</h2>
           </div>
           <StatusBadge :value="item.status" />
@@ -75,25 +115,25 @@ onMounted(async () => {
         <div class="scholarship-card__facts">
           <span>{{ formatMoney(item.amount) }}</span>
           <span>剩餘 {{ item.seatsLeft }} / {{ item.quota }} 名</span>
-          <span>截止 {{ item.deadline }}</span>
+          <span>截止 {{ formatDate(item.deadline) }}</span>
         </div>
 
-        <div class="tag-list">
-          <span v-for="tag in item.tags" :key="tag">{{ tag }}</span>
+        <div v-if="item.ineligibilityReasons?.length" class="tag-list">
+          <span v-for="reason in item.ineligibilityReasons" :key="reason">{{ reason }}</span>
         </div>
 
         <dl class="criteria-list">
           <div>
             <dt>GPA 門檻</dt>
-            <dd>{{ item.criteria.minGpa }}</dd>
+            <dd>{{ item.minGpa ?? '不限' }}</dd>
           </div>
           <div>
             <dt>適用科系</dt>
-            <dd>{{ item.criteria.departments.join('、') }}</dd>
+            <dd>{{ item.departmentLimit || '不限科系' }}</dd>
           </div>
           <div>
-            <dt>推薦信</dt>
-            <dd>{{ item.requireRecommendation ? '需要' : '不需要' }}</dd>
+            <dt>聯絡資訊</dt>
+            <dd>{{ item.contactEmail || '請洽提供單位' }}</dd>
           </div>
         </dl>
 

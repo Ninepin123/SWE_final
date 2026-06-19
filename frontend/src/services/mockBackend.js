@@ -1,11 +1,12 @@
-const STORAGE_KEY = 'nuksams_mock_state_v3'
+const STORAGE_KEY = 'nuksams_mock_state_v4'
 const CURRENT_USER_KEY = 'nuksams_current_user_id'
 
 export const ROLE_LABELS = {
   STUDENT: '學生',
+  TEACHER: '教師',
+  SPONSOR: '獎助單位人員',
   REVIEWER: '審查人員',
   ADMIN: '系統管理員',
-  RECOMMENDER: '推薦人',
 }
 
 export const APPLICATION_STATUS = {
@@ -80,10 +81,10 @@ function getSeedState() {
       },
       {
         id: 'u-recommender',
-        account: 'mchen',
+        account: 'teacher',
         name: '陳明哲',
         email: 'mchen@nuk.edu.tw',
-        role: 'RECOMMENDER',
+        role: 'TEACHER',
         unit: '資訊管理學系',
         status: 'ACTIVE',
         phone: '07-5919000#3302',
@@ -728,7 +729,7 @@ export async function createApplication(studentId, payload) {
         account: payload.recommender.email.split('@')[0],
         name: payload.recommender.name,
         email: payload.recommender.email,
-        role: 'RECOMMENDER',
+        role: 'TEACHER',
         unit: payload.recommender.title || '校外推薦人',
         status: 'ACTIVE',
         phone: '',

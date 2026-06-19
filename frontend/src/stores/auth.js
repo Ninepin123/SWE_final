@@ -2,8 +2,13 @@
 // 其他子系統需要「目前登入者是誰、角色為何」時，一律從這裡取，
 // 不要自己讀 localStorage。
 import { defineStore } from 'pinia'
-import { getMe, loginAs as loginAsApi, logout as logoutApi } from '@/api/aas'
-import { ROLE_LABELS } from '@/services/mockBackend'
+import {
+  getMe,
+  login as loginApi,
+  loginAs as loginAsApi,
+  logout as logoutApi,
+  ROLE_LABELS,
+} from '@/api/aas'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -27,6 +32,23 @@ export const useAuthStore = defineStore('auth', {
       try {
         this.user = await getMe()
         return this.user
+      } catch (error) {
+        localStorage.removeItem('token')
+        this.token = null
+        this.user = null
+        throw error
+      } finally {
+        this.loading = false
+      }
+    },
+    async login(account, password) {
+      this.loading = true
+      try {
+        const result = await loginApi({ account, password })
+        localStorage.setItem('token', result.access_token)
+        this.token = result.access_token
+        this.user = result.user
+        return this.user
       } finally {
         this.loading = false
       }
@@ -42,9 +64,13 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     async logout() {
-      await logoutApi()
-      this.token = null
-      this.user = null
+      try {
+        if (this.token) await logoutApi()
+      } finally {
+        localStorage.removeItem('token')
+        this.token = null
+        this.user = null
+      }
     },
   },
 })

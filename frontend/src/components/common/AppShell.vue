@@ -3,7 +3,8 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
-import { ROLE_LABELS } from '@/services/mockBackend'
+import { ROLE_LABELS } from '@/api/aas'
+import { useMockApi } from '@/api/http'
 import Icon from '@/components/common/Icon.vue'
 
 const route = useRoute()
@@ -16,27 +17,28 @@ const navGroups = [
   {
     label: '主要功能',
     items: [
-      { label: '系統總覽', to: '/dashboard', roles: ['STUDENT', 'REVIEWER', 'ADMIN', 'RECOMMENDER'], icon: 'dashboard' },
+      { label: '系統總覽', to: '/dashboard', roles: ['STUDENT', 'TEACHER', 'SPONSOR', 'REVIEWER', 'ADMIN'], icon: 'dashboard' },
       { label: '可申請獎學金', to: '/scholarships', roles: ['STUDENT'], icon: 'scholarship' },
       { label: '我的申請', to: '/applications', roles: ['STUDENT'], icon: 'application' },
       { label: '個人資料', to: '/profile', roles: ['STUDENT'], icon: 'profile' },
       { label: '申請案審查', to: '/reviews', roles: ['REVIEWER'], icon: 'review' },
       { label: '核發名單', to: '/award-list', roles: ['REVIEWER', 'ADMIN'], icon: 'list' },
       { label: '年度統計與報表', to: '/statistics', roles: ['REVIEWER', 'ADMIN'], icon: 'chart' },
-      { label: '推薦信邀請', to: '/recommendations', roles: ['RECOMMENDER'], icon: 'recommend' },
+      { label: '推薦信邀請', to: '/recommendations', roles: ['TEACHER'], icon: 'recommend' },
     ],
   },
   {
     label: '系統管理',
     items: [
       { label: '帳號管理', to: '/admin/users', roles: ['ADMIN'], icon: 'admin' },
-      { label: '獎學金管理', to: '/admin/scholarships', roles: ['ADMIN'], icon: 'manage' },
+      { label: '稽核日誌', to: '/admin/audit-logs', roles: ['ADMIN'], icon: 'archive' },
+      { label: '獎學金管理', to: '/admin/scholarships', roles: ['SPONSOR', 'ADMIN'], icon: 'manage' },
     ],
   },
   {
     label: '其他',
     items: [
-      { label: '通知中心', to: '/notifications', roles: ['STUDENT', 'REVIEWER', 'ADMIN', 'RECOMMENDER'], icon: 'notification' },
+      { label: '通知中心', to: '/notifications', roles: ['STUDENT', 'TEACHER', 'SPONSOR', 'REVIEWER', 'ADMIN'], icon: 'notification' },
     ],
   },
 ]
@@ -51,7 +53,8 @@ const visibleGroups = computed(() =>
 )
 
 const roleOptions = computed(() =>
-  Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label })),
+  Object.entries(ROLE_LABELS)
+    .map(([value, label]) => ({ value, label })),
 )
 
 async function switchRole(event) {
@@ -94,7 +97,7 @@ async function logout() {
         </div>
       </nav>
 
-      <p class="sidebar__dev-note">測試模式 · mock 後端運作中</p>
+      <p v-if="useMockApi" class="sidebar__dev-note">測試模式 · mock 後端運作中</p>
     </aside>
 
     <div class="workspace">

@@ -57,15 +57,66 @@
 
 ## SAS 學生申請
 
+### GET /api/sas/scholarships/available  （僅 STUDENT）
+- 依目前登入學生的 `department` 與 `gpa` 判斷資格。
+- Query：`keyword?`, `category?`, `department?`, `deadline_before?`, `eligible_only?`
+- Response：`ScholarshipEligibilityOut[]`
+- 每筆包含 `remaining_quota`, `already_applied`, `can_apply`, `ineligibility_reasons`。
+- 不可申請原因可能包含：未開放、已截止、名額已滿、GPA 未達、科系不符、資料不足或已申請。
+- 目前 SMS 尚未提供必要文件資料結構，因此 `required_documents` 暫時回傳空陣列。
+
 ### POST /api/sas/applications  （僅 STUDENT）
-- 檢查：獎學金開放中、未截止、GPA 達門檻、未重複申請。
-- Request：`{ "scholarship_id": 1, "statement": "..." }`
-- Response：`ApplicationOut = { application_id, scholarship_id, scholarship_name, status, statement, created_at }`（201）
-- `status` 初始為 `UNDER_REVIEW`。
+- 建立申請草稿；檢查獎學金開放中、未截止、資格符合且沒有重複草稿或申請。
+- Request：`{ scholarship_id, statement?, contact_phone?, address?, household_status?, academic_note? }`
+- Response：`ApplicationOut`（201），初始 `status=DRAFT`。
+
+### PUT /api/sas/applications/{id}  （僅申請學生）
+- 更新自己的草稿。正式送出、已截止或關閉後不可修改。
+- Request：`{ statement?, contact_phone?, address?, household_status?, academic_note? }`
+
+### POST /api/sas/applications/{id}/submit  （僅申請學生）
+- 正式送出草稿；重新檢查資格、期限、申請表必填欄位及至少一份文字文件。
+- 成功後狀態由 `DRAFT` 改為 `UNDER_REVIEW`，寫入 `submitted_at` 並發送通知。
+- 正式送出後不可再次修改或重複送出。
+
+### GET /api/sas/applications/{id}  （僅申請學生）
+- 查詢自己的單筆申請或草稿。
+
+### GET /api/sas/applications/{id}/events  （僅申請學生）
+- 查詢自己的申請進度與重要操作紀錄。
+- 記錄草稿建立/修改、文字文件異動、正式送出、補件要求、補件提交及狀態變更。
+- Response 包含操作者、事件類型、前後狀態、摘要與時間；不複製完整敏感文件內容。
+
+### GET /api/sas/applications/{id}/documents  （僅申請學生）
+- 查詢自己的申請文字文件。
+
+### POST /api/sas/applications/{id}/documents  （僅申請學生）
+- 新增或更新同類型文字文件。
+- Request：`{ document_type, title, content_text }`
+- `document_type`：`TRANSCRIPT / AUTOBIOGRAPHY / CERTIFICATE / OTHER`
+- 目前只儲存文字內容；資料表預留實體檔案路徑、MIME type 與檔案大小欄位。
+
+### DELETE /api/sas/applications/{id}/documents/{document_id}
+- 刪除自己的草稿文件。
+- 正式送出、申請截止或獎學金關閉後禁止修改與刪除。
+
+### POST /api/sas/applications/{id}/supplement-requests  （僅 REVIEWER）
+- 建立補件要求。Request：`{ required_items, deadline }`
+- 審查人員必須與該獎學金屬於相同單位。
+- 建立後申請狀態改為 `NEED_SUPPLEMENT`，並通知學生。
+- 供 RAS 子系統呼叫；RAS 不應直接寫入 SAS 資料表。
+
+### GET /api/sas/applications/{id}/supplement-requests  （僅申請學生）
+- 查詢自己的補件要求、期限、狀態與歷史內容。
+
+### POST /api/sas/applications/{id}/supplement-requests/{supplement_id}/submit
+- 學生在期限內提交文字補件：`{ response_text }`
+- 成功後補件狀態改為 `SUBMITTED`，申請重新進入 `UNDER_REVIEW`，並通知審查人員。
 
 ### GET /api/sas/applications/me  （僅 STUDENT）
 - Response：`ApplicationOut[]`
-- `status`：`UNDER_REVIEW`(審核中) / `NEED_SUPPLEMENT`(需補件) / `APPROVED`(已通過) / `REJECTED`(未通過)
+- `status`：`DRAFT`(草稿) / `UNDER_REVIEW`(審核中) / `NEED_SUPPLEMENT`(需補件) / `APPROVED`(已通過) / `REJECTED`(未通過)
+- `ApplicationOut` 包含 `created_at`, `updated_at`, `submitted_at`, `can_edit`。
 
 ---
 
@@ -111,8 +162,10 @@
 ## SAS（變更/新增）
 - 申請表（`POST /api/sas/applications`）新增欄位：`statement(申請理由), contact_phone, address, household_status, academic_note`。
 - 申請成功會透過 NCS 發送通知給學生。
-- **GET /api/sas/profile**（僅 STUDENT）：`ProfileOut`（身分資料唯讀 + 可編輯欄位）。
-- **PUT /api/sas/profile**（僅 STUDENT）：更新 `contact_phone, address, emergency_contact_name, emergency_contact_phone`（學號/姓名/GPA 不可改）。
+- **GET /api/sas/profile**（僅 STUDENT）：`ProfileOut = { user_id, account, name, department, grade, gpa, identity_type, email, contact_phone, address, emergency_contact_name, emergency_contact_phone }`。
+  - `account/name/department/grade/gpa/identity_type` 為核心身分資料，只讀。
+  - `email/contact_phone/address/emergency_contact_name/emergency_contact_phone` 為學生可維護的聯絡資料。
+- **PUT /api/sas/profile**（僅 STUDENT）：只接受 `email, contact_phone, address, emergency_contact_name, emergency_contact_phone`。即使 request 夾帶學號、姓名、科系、年級、GPA 或身份類別，也不會修改核心資料。
 
 ## RAS（變更）
 - 兩支端點改為 **僅 REVIEWER**（移除 ADMIN）。
