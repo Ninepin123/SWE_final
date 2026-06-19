@@ -95,6 +95,19 @@
 - 刪除自己的草稿文件。
 - 正式送出、申請截止或獎學金關閉後禁止修改與刪除。
 
+### POST /api/sas/applications/{id}/supplement-requests  （僅 REVIEWER）
+- 建立補件要求。Request：`{ required_items, deadline }`
+- 審查人員必須與該獎學金屬於相同單位。
+- 建立後申請狀態改為 `NEED_SUPPLEMENT`，並通知學生。
+- 供 RAS 子系統呼叫；RAS 不應直接寫入 SAS 資料表。
+
+### GET /api/sas/applications/{id}/supplement-requests  （僅申請學生）
+- 查詢自己的補件要求、期限、狀態與歷史內容。
+
+### POST /api/sas/applications/{id}/supplement-requests/{supplement_id}/submit
+- 學生在期限內提交文字補件：`{ response_text }`
+- 成功後補件狀態改為 `SUBMITTED`，申請重新進入 `UNDER_REVIEW`，並通知審查人員。
+
 ### GET /api/sas/applications/me  （僅 STUDENT）
 - Response：`ApplicationOut[]`
 - `status`：`DRAFT`(草稿) / `UNDER_REVIEW`(審核中) / `NEED_SUPPLEMENT`(需補件) / `APPROVED`(已通過) / `REJECTED`(未通過)

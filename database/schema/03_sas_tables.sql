@@ -80,6 +80,22 @@ CREATE TABLE IF NOT EXISTS application_documents (
         REFERENCES applications(application_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS supplement_requests (
+    supplement_id  INT AUTO_INCREMENT PRIMARY KEY,
+    application_id INT NOT NULL,
+    reviewer_id    INT NOT NULL,
+    required_items TEXT NOT NULL,
+    deadline       DATETIME NOT NULL,
+    status         ENUM('REQUESTED','SUBMITTED') NOT NULL DEFAULT 'REQUESTED',
+    response_text  TEXT NULL,
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    submitted_at   DATETIME NULL,
+    CONSTRAINT fk_supplement_application FOREIGN KEY (application_id)
+        REFERENCES applications(application_id) ON DELETE CASCADE,
+    CONSTRAINT fk_supplement_reviewer FOREIGN KEY (reviewer_id)
+        REFERENCES users(user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='student_profiles' AND column_name='grade');
 SET @s := IF(@c=0, 'ALTER TABLE student_profiles ADD COLUMN grade VARCHAR(20) NULL', 'SELECT 1');
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;

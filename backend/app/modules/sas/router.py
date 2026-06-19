@@ -19,6 +19,9 @@ from app.modules.sas.schemas import (
     ProfileOut,
     ProfileUpdate,
     ScholarshipEligibilityOut,
+    SupplementRequestCreate,
+    SupplementRequestOut,
+    SupplementSubmit,
 )
 
 router = APIRouter(prefix="/api/sas", tags=["SAS 學生申請"])
@@ -121,6 +124,47 @@ def delete_document(
 ):
     service.delete_document(db, student, application_id, document_id)
     return {"detail": "已刪除文字文件"}
+
+
+@router.post(
+    "/applications/{application_id}/supplement-requests",
+    response_model=SupplementRequestOut,
+)
+def create_supplement_request(
+    application_id: int,
+    body: SupplementRequestCreate,
+    db: Session = Depends(get_db),
+    reviewer: User = Depends(require_roles("REVIEWER")),
+):
+    return service.create_supplement_request(db, reviewer, application_id, body)
+
+
+@router.get(
+    "/applications/{application_id}/supplement-requests",
+    response_model=list[SupplementRequestOut],
+)
+def list_supplement_requests(
+    application_id: int,
+    db: Session = Depends(get_db),
+    student: User = Depends(require_roles("STUDENT")),
+):
+    return service.list_supplement_requests(db, student, application_id)
+
+
+@router.post(
+    "/applications/{application_id}/supplement-requests/{supplement_id}/submit",
+    response_model=SupplementRequestOut,
+)
+def submit_supplement(
+    application_id: int,
+    supplement_id: int,
+    body: SupplementSubmit,
+    db: Session = Depends(get_db),
+    student: User = Depends(require_roles("STUDENT")),
+):
+    return service.submit_supplement(
+        db, student, application_id, supplement_id, body
+    )
 
 
 @router.get("/profile", response_model=ProfileOut)

@@ -11,7 +11,12 @@ from app.core.database import Base, get_db
 from app.modules.aas.models import Unit, User
 from app.modules.aas.security import create_access_token, hash_password
 from app.modules.ncs.models import Notification
-from app.modules.sas.models import Application, ApplicationDocument, StudentProfile
+from app.modules.sas.models import (
+    Application,
+    ApplicationDocument,
+    StudentProfile,
+    SupplementRequest,
+)
 from app.modules.sas.router import router
 from app.modules.sms.models import Scholarship
 
@@ -32,6 +37,7 @@ def db_session():
             Scholarship.__table__,
             Application.__table__,
             ApplicationDocument.__table__,
+            SupplementRequest.__table__,
             StudentProfile.__table__,
             Notification.__table__,
         ],
@@ -56,20 +62,25 @@ def client(db_session):
     return TestClient(app)
 
 
-def create_student(db_session, account):
-    student = User(
+def create_user(db_session, account, *, role="STUDENT", unit_id=None):
+    user = User(
         account=account,
         password=hash_password("password123"),
         name=account,
-        role="STUDENT",
+        role=role,
+        unit_id=unit_id,
         department="資訊工程學系",
         gpa=3.8,
         status="ACTIVE",
     )
-    db_session.add(student)
+    db_session.add(user)
     db_session.commit()
-    db_session.refresh(student)
-    return student
+    db_session.refresh(user)
+    return user
+
+
+def create_student(db_session, account):
+    return create_user(db_session, account)
 
 
 def create_scholarship(db_session, *, deadline=None):
@@ -394,3 +405,164 @@ def test_documents_are_owner_only_and_locked_after_submit(client, db_session):
 
     assert update_after_submit.status_code == 409
     assert delete_after_submit.status_code == 409
+
+
+def create_submitted_application(client, db_session, student, scholarship):
+    draft = client.post(
+        "/api/sas/applications",
+        headers=headers(student),
+        json=complete_payload(scholarship.scholarship_id),
+    ).json()
+    application_id = draft["application_id"]
+    client.post(
+        f"/api/sas/applications/{application_id}/documents",
+        headers=headers(student),
+        json={
+            "document_type": "AUTOBIOGRAPHY",
+            "title": "自傳",
+            "content_text": "完整自傳內容",
+        },
+    )
+    client.post(
+        f"/api/sas/applications/{application_id}/submit",
+        headers=headers(student),
+    )
+    return application_id
+
+
+def test_reviewer_can_request_and_student_can_submit_supplement(client, db_session):
+    student = create_student(db_session, "supplement-student")
+    scholarship = create_scholarship(db_session)
+    reviewer = create_user(
+        db_session,
+        "reviewer01",
+        role="REVIEWER",
+        unit_id=scholarship.unit_id,
+    )
+    application_id = create_submitted_application(
+        client, db_session, student, scholarship
+    )
+    deadline = datetime.now() + timedelta(days=3)
+
+    request_response = client.post(
+        f"/api/sas/applications/{application_id}/supplement-requests",
+        headers=headers(reviewer),
+        json={
+            "required_items": "請補充家庭經濟狀況與成績說明",
+            "deadline": deadline.isoformat(),
+        },
+    )
+    assert request_response.status_code == 200
+    request = request_response.json()
+    assert request["status"] == "REQUESTED"
+    assert request["can_submit"] is True
+    assert db_session.get(Application, application_id).status == "NEED_SUPPLEMENT"
+
+    list_response = client.get(
+        f"/api/sas/applications/{application_id}/supplement-requests",
+        headers=headers(student),
+    )
+    assert list_response.status_code == 200
+    assert len(list_response.json()) == 1
+
+    submit_response = client.post(
+        f"/api/sas/applications/{application_id}/supplement-requests/{request['supplement_id']}/submit",
+        headers=headers(student),
+        json={"response_text": "補充家庭經濟狀況與本學期成績說明。"},
+    )
+    assert submit_response.status_code == 200
+    assert submit_response.json()["status"] == "SUBMITTED"
+    assert submit_response.json()["can_submit"] is False
+    assert db_session.get(Application, application_id).status == "UNDER_REVIEW"
+    notifications = list(db_session.scalars(select(Notification)))
+    assert any(item.user_id == student.user_id and item.title == "補件通知" for item in notifications)
+    assert any(item.user_id == reviewer.user_id and item.title == "學生已完成補件" for item in notifications)
+
+
+def test_reviewer_unit_isolation_and_duplicate_request(client, db_session):
+    student = create_student(db_session, "supplement-student-2")
+    scholarship = create_scholarship(db_session)
+    other_unit = Unit(name="其他審查單位", type="SCHOOL")
+    db_session.add(other_unit)
+    db_session.commit()
+    wrong_reviewer = create_user(
+        db_session,
+        "wrong-reviewer",
+        role="REVIEWER",
+        unit_id=other_unit.unit_id,
+    )
+    reviewer = create_user(
+        db_session,
+        "right-reviewer",
+        role="REVIEWER",
+        unit_id=scholarship.unit_id,
+    )
+    application_id = create_submitted_application(
+        client, db_session, student, scholarship
+    )
+    payload = {
+        "required_items": "補充文件",
+        "deadline": (datetime.now() + timedelta(days=2)).isoformat(),
+    }
+
+    forbidden = client.post(
+        f"/api/sas/applications/{application_id}/supplement-requests",
+        headers=headers(wrong_reviewer),
+        json=payload,
+    )
+    first = client.post(
+        f"/api/sas/applications/{application_id}/supplement-requests",
+        headers=headers(reviewer),
+        json=payload,
+    )
+    second = client.post(
+        f"/api/sas/applications/{application_id}/supplement-requests",
+        headers=headers(reviewer),
+        json=payload,
+    )
+
+    assert forbidden.status_code == 403
+    assert first.status_code == 200
+    assert second.status_code == 409
+
+
+def test_expired_or_other_students_supplement_cannot_be_submitted(client, db_session):
+    owner = create_student(db_session, "supplement-owner")
+    other = create_student(db_session, "supplement-other")
+    scholarship = create_scholarship(db_session)
+    reviewer = create_user(
+        db_session,
+        "reviewer02",
+        role="REVIEWER",
+        unit_id=scholarship.unit_id,
+    )
+    application_id = create_submitted_application(
+        client, db_session, owner, scholarship
+    )
+    request_response = client.post(
+        f"/api/sas/applications/{application_id}/supplement-requests",
+        headers=headers(reviewer),
+        json={
+            "required_items": "逾期測試",
+            "deadline": (datetime.now() + timedelta(days=1)).isoformat(),
+        },
+    )
+    supplement_id = request_response.json()["supplement_id"]
+    request = db_session.get(SupplementRequest, supplement_id)
+    request.deadline = datetime.now() - timedelta(minutes=1)
+    db_session.commit()
+
+    other_response = client.post(
+        f"/api/sas/applications/{application_id}/supplement-requests/{supplement_id}/submit",
+        headers=headers(other),
+        json={"response_text": "越權補件"},
+    )
+    expired_response = client.post(
+        f"/api/sas/applications/{application_id}/supplement-requests/{supplement_id}/submit",
+        headers=headers(owner),
+        json={"response_text": "逾期補件"},
+    )
+
+    assert other_response.status_code == 404
+    assert expired_response.status_code == 409
+    assert expired_response.json()["detail"] == "已超過補件期限"

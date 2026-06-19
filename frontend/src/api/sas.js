@@ -85,6 +85,27 @@ export function deleteApplicationDocument(applicationId, documentId) {
     .then((response) => response.data)
 }
 
+export function createSupplementRequest(applicationId, data) {
+  return http
+    .post(`/sas/applications/${applicationId}/supplement-requests`, data)
+    .then((response) => response.data)
+}
+
+export function listSupplementRequests(applicationId) {
+  return http
+    .get(`/sas/applications/${applicationId}/supplement-requests`)
+    .then((response) => response.data)
+}
+
+export function submitSupplement(applicationId, supplementId, data) {
+  return http
+    .post(
+      `/sas/applications/${applicationId}/supplement-requests/${supplementId}/submit`,
+      data,
+    )
+    .then((response) => response.data)
+}
+
 export function sendRecommendationReminder(studentId, requestId) {
   return withApiFallback(
     () => http.post(`/sas/recommendations/${requestId}/reminder`),

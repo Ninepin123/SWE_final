@@ -21,6 +21,15 @@ export default [
     },
   },
   {
+    path: '/applications/:id/supplement',
+    name: 'sas-supplement',
+    component: () => import('@/views/sas/SupplementView.vue'),
+    meta: {
+      title: '提交補件',
+      roles: ['STUDENT'],
+    },
+  },
+  {
     path: '/profile',
     name: 'sas-profile',
     component: () => import('@/views/sas/ProfileView.vue'),

@@ -13,12 +13,19 @@ from sqlalchemy.orm import Session
 
 from app.modules.aas.models import Unit, User
 from app.modules.ncs import service as ncs_service
-from app.modules.sas.models import Application, ApplicationDocument, StudentProfile
+from app.modules.sas.models import (
+    Application,
+    ApplicationDocument,
+    StudentProfile,
+    SupplementRequest,
+)
 from app.modules.sas.schemas import (
     ApplicationCreate,
     ApplicationDocumentWrite,
     ApplicationUpdate,
     ProfileUpdate,
+    SupplementRequestCreate,
+    SupplementSubmit,
 )
 from app.modules.sms.models import Scholarship
 
@@ -317,6 +324,117 @@ def delete_document(
         raise HTTPException(status_code=404, detail="找不到文件")
     db.delete(document)
     db.commit()
+
+
+def _supplement_to_out(request: SupplementRequest) -> dict:
+    return {
+        "supplement_id": request.supplement_id,
+        "application_id": request.application_id,
+        "reviewer_id": request.reviewer_id,
+        "required_items": request.required_items,
+        "deadline": request.deadline,
+        "status": request.status,
+        "response_text": request.response_text,
+        "created_at": request.created_at,
+        "submitted_at": request.submitted_at,
+        "can_submit": (
+            request.status == "REQUESTED"
+            and _naive(request.deadline) >= datetime.now()
+        ),
+    }
+
+
+def create_supplement_request(
+    db: Session,
+    reviewer: User,
+    application_id: int,
+    data: SupplementRequestCreate,
+) -> dict:
+    app = db.get(Application, application_id)
+    if app is None or app.status not in {"UNDER_REVIEW", "NEED_SUPPLEMENT"}:
+        raise HTTPException(status_code=409, detail="此申請案目前不可要求補件")
+    scholarship = db.get(Scholarship, app.scholarship_id)
+    if (
+        reviewer.unit_id is None
+        or scholarship is None
+        or reviewer.unit_id != scholarship.unit_id
+    ):
+        raise HTTPException(status_code=403, detail="只能處理自己單位的申請案")
+    deadline = _naive(data.deadline)
+    if deadline <= datetime.now():
+        raise HTTPException(status_code=400, detail="補件期限必須晚於目前時間")
+    active = db.scalar(
+        select(SupplementRequest).where(
+            SupplementRequest.application_id == application_id,
+            SupplementRequest.status == "REQUESTED",
+        )
+    )
+    if active is not None:
+        raise HTTPException(status_code=409, detail="此申請案已有待處理的補件要求")
+    request = SupplementRequest(
+        application_id=application_id,
+        reviewer_id=reviewer.user_id,
+        required_items=data.required_items.strip(),
+        deadline=deadline,
+        status="REQUESTED",
+    )
+    app.status = "NEED_SUPPLEMENT"
+    db.add(request)
+    db.commit()
+    db.refresh(request)
+    ncs_service.create_notification(
+        db,
+        app.student_id,
+        "補件通知",
+        f"你的申請需要補件：{request.required_items}。期限：{deadline.isoformat(sep=' ', timespec='minutes')}",
+        commit=True,
+    )
+    return _supplement_to_out(request)
+
+
+def list_supplement_requests(
+    db: Session,
+    student: User,
+    application_id: int,
+) -> list[dict]:
+    _get_owned_application(db, student, application_id)
+    requests = db.scalars(
+        select(SupplementRequest)
+        .where(SupplementRequest.application_id == application_id)
+        .order_by(SupplementRequest.created_at.desc(), SupplementRequest.supplement_id.desc())
+    ).all()
+    return [_supplement_to_out(request) for request in requests]
+
+
+def submit_supplement(
+    db: Session,
+    student: User,
+    application_id: int,
+    supplement_id: int,
+    data: SupplementSubmit,
+) -> dict:
+    app = _get_owned_application(db, student, application_id)
+    request = db.get(SupplementRequest, supplement_id)
+    if request is None or request.application_id != application_id:
+        raise HTTPException(status_code=404, detail="找不到補件要求")
+    if request.status != "REQUESTED":
+        raise HTTPException(status_code=409, detail="此補件已送出")
+    if _naive(request.deadline) < datetime.now():
+        raise HTTPException(status_code=409, detail="已超過補件期限")
+    request.response_text = data.response_text.strip()
+    request.status = "SUBMITTED"
+    request.submitted_at = datetime.now()
+    app.status = "UNDER_REVIEW"
+    db.commit()
+    db.refresh(request)
+    ncs_service.create_notification(
+        db,
+        request.reviewer_id,
+        "學生已完成補件",
+        f"申請案 #{application_id} 已提交補件內容。",
+        commit=True,
+    )
+    return _supplement_to_out(request)
 
 
 def submit_application(db: Session, student: User, application_id: int) -> dict:

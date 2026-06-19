@@ -61,3 +61,19 @@ class ApplicationDocument(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+
+class SupplementRequest(Base):
+    __tablename__ = "supplement_requests"
+
+    supplement_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    application_id: Mapped[int] = mapped_column(
+        ForeignKey("applications.application_id"), nullable=False
+    )
+    reviewer_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"), nullable=False)
+    required_items: Mapped[str] = mapped_column(Text, nullable=False)
+    deadline: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="REQUESTED")
+    response_text: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime)

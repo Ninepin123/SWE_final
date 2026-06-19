@@ -53,6 +53,28 @@ class ApplicationDocumentOut(BaseModel):
     updated_at: datetime
 
 
+class SupplementRequestCreate(BaseModel):
+    required_items: str = Field(min_length=1, max_length=2000)
+    deadline: datetime
+
+
+class SupplementSubmit(BaseModel):
+    response_text: str = Field(min_length=1, max_length=20000)
+
+
+class SupplementRequestOut(BaseModel):
+    supplement_id: int
+    application_id: int
+    reviewer_id: int
+    required_items: str
+    deadline: datetime
+    status: str
+    response_text: str | None = None
+    created_at: datetime
+    submitted_at: datetime | None = None
+    can_submit: bool
+
+
 class ProfileOut(BaseModel):
     # 唯讀身分資料（來自 users）
     user_id: int

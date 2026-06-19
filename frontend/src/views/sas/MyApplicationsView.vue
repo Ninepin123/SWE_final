@@ -75,6 +75,13 @@ onMounted(async () => {
                 >
                   繼續填寫
                 </RouterLink>
+                <RouterLink
+                  v-else-if="application.status === 'NEED_SUPPLEMENT'"
+                  class="primary-button"
+                  :to="`/applications/${application.application_id}/supplement`"
+                >
+                  提交補件
+                </RouterLink>
                 <span v-else class="muted-text">已送出，無法修改</span>
               </td>
             </tr>
