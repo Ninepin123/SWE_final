@@ -1,11 +1,13 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import AuditTimeline from '@/components/common/AuditTimeline.vue'
 import BaseCard from '@/components/common/BaseCard.vue'
+import BaseModal from '@/components/common/BaseModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
-import { listMyApplications } from '@/api/sas'
+import { listApplicationDocuments, listApplicationEvents, listMyApplications } from '@/api/sas'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
@@ -13,6 +15,22 @@ const auth = useAuthStore()
 const toast = useToastStore()
 const loading = ref(true)
 const applications = ref([])
+const selected = ref(null)
+const selectedEvents = ref([])
+const selectedDocuments = ref([])
+const detailLoading = ref(false)
+
+const eventLabels = {
+  DRAFT_CREATED: '建立申請草稿',
+  DRAFT_UPDATED: '更新申請草稿',
+  DOCUMENT_CREATED: '新增文字文件',
+  DOCUMENT_UPDATED: '更新文字文件',
+  DOCUMENT_DELETED: '刪除文字文件',
+  APPLICATION_SUBMITTED: '正式送出申請',
+  SUPPLEMENT_REQUESTED: '審查人員要求補件',
+  SUPPLEMENT_SUBMITTED: '學生完成補件',
+  STATUS_CHANGED: '申請狀態更新',
+}
 
 function formatDate(value) {
   if (!value) return '—'
@@ -23,6 +41,28 @@ function formatDate(value) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value))
+}
+
+async function openDetail(application) {
+  selected.value = application
+  selectedEvents.value = []
+  selectedDocuments.value = []
+  detailLoading.value = true
+  try {
+    const [events, documents] = await Promise.all([
+      listApplicationEvents(application.application_id),
+      listApplicationDocuments(application.application_id),
+    ])
+    selectedEvents.value = events.map((event) => ({
+      ...event,
+      action: eventLabels[event.action] || event.action,
+    }))
+    selectedDocuments.value = documents
+  } catch (error) {
+    toast.error(error.response?.data?.detail || error.message || '申請詳情載入失敗')
+  } finally {
+    detailLoading.value = false
+  }
 }
 
 onMounted(async () => {
@@ -68,21 +108,25 @@ onMounted(async () => {
               <td>{{ formatDate(application.submitted_at ?? application.submittedAt) }}</td>
               <td><StatusBadge :value="application.status" /></td>
               <td>
-                <RouterLink
-                  v-if="application.status === 'DRAFT'"
-                  class="primary-button"
-                  :to="`/scholarships/${application.scholarship_id}/apply`"
-                >
-                  繼續填寫
-                </RouterLink>
-                <RouterLink
-                  v-else-if="application.status === 'NEED_SUPPLEMENT'"
-                  class="primary-button"
-                  :to="`/applications/${application.application_id}/supplement`"
-                >
-                  提交補件
-                </RouterLink>
-                <span v-else class="muted-text">已送出，無法修改</span>
+                <div class="table-actions">
+                  <button class="secondary-button" type="button" @click="openDetail(application)">
+                    查看進度
+                  </button>
+                  <RouterLink
+                    v-if="application.status === 'DRAFT'"
+                    class="primary-button"
+                    :to="`/scholarships/${application.scholarship_id}/apply`"
+                  >
+                    繼續填寫
+                  </RouterLink>
+                  <RouterLink
+                    v-else-if="application.status === 'NEED_SUPPLEMENT'"
+                    class="primary-button"
+                    :to="`/applications/${application.application_id}/supplement`"
+                  >
+                    提交補件
+                  </RouterLink>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -90,4 +134,51 @@ onMounted(async () => {
       </div>
     </BaseCard>
   </div>
+
+  <BaseModal
+    :show="!!selected"
+    :title="selected?.scholarship_name || '申請詳情'"
+    width="920px"
+    @close="selected = null"
+  >
+    <LoadingSkeleton v-if="detailLoading" :rows="4" />
+    <div v-else-if="selected" class="detail-grid">
+      <section>
+        <h3>申請摘要</h3>
+        <dl class="review-list">
+          <div>
+            <dt>目前狀態</dt>
+            <dd><StatusBadge :value="selected.status" /></dd>
+          </div>
+          <div>
+            <dt>建立時間</dt>
+            <dd>{{ formatDate(selected.created_at) }}</dd>
+          </div>
+          <div>
+            <dt>正式送出</dt>
+            <dd>{{ formatDate(selected.submitted_at) }}</dd>
+          </div>
+          <div>
+            <dt>申請理由</dt>
+            <dd>{{ selected.statement || '—' }}</dd>
+          </div>
+        </dl>
+
+        <h3>文字文件</h3>
+        <div v-if="selectedDocuments.length" class="recommendation-list">
+          <article v-for="document in selectedDocuments" :key="document.document_id" class="mini-panel">
+            <strong>{{ document.title }}</strong>
+            <p>{{ document.content_text }}</p>
+          </article>
+        </div>
+        <p v-else class="muted-text">目前沒有文字文件。</p>
+      </section>
+
+      <section>
+        <h3>申請進度</h3>
+        <AuditTimeline v-if="selectedEvents.length" :logs="selectedEvents" />
+        <p v-else class="muted-text">目前沒有進度紀錄。</p>
+      </section>
+    </div>
+  </BaseModal>
 </template>

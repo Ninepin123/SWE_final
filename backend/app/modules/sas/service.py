@@ -16,6 +16,7 @@ from app.modules.ncs import service as ncs_service
 from app.modules.sas.models import (
     Application,
     ApplicationDocument,
+    ApplicationEvent,
     StudentProfile,
     SupplementRequest,
 )
@@ -32,6 +33,30 @@ from app.modules.sms.models import Scholarship
 VALID_STATUSES = {"DRAFT", "UNDER_REVIEW", "NEED_SUPPLEMENT", "APPROVED", "REJECTED"}
 VALID_CATEGORIES = {"SCHOOL", "GOVERNMENT", "PRIVATE", "LOW_INCOME", "MERIT", "OTHER"}
 VALID_DOCUMENT_TYPES = {"TRANSCRIPT", "AUTOBIOGRAPHY", "CERTIFICATE", "OTHER"}
+
+
+def write_application_event(
+    db: Session,
+    application_id: int,
+    actor_id: int | None,
+    event_type: str,
+    from_status: str | None = None,
+    to_status: str | None = None,
+    detail: str | None = None,
+    commit: bool = False,
+) -> ApplicationEvent:
+    event = ApplicationEvent(
+        application_id=application_id,
+        actor_id=actor_id,
+        event_type=event_type,
+        from_status=from_status,
+        to_status=to_status,
+        detail=detail,
+    )
+    db.add(event)
+    if commit:
+        db.commit()
+    return event
 
 
 def _naive(dt: datetime | None) -> datetime | None:
@@ -246,6 +271,15 @@ def create_draft(db: Session, student: User, data: ApplicationCreate) -> dict:
         academic_note=data.academic_note,
     )
     db.add(app)
+    db.flush()
+    write_application_event(
+        db,
+        app.application_id,
+        student.user_id,
+        "DRAFT_CREATED",
+        to_status="DRAFT",
+        detail="建立申請草稿",
+    )
     db.commit()
     db.refresh(app)
     return _to_out(db, app)
@@ -255,11 +289,49 @@ def get_my_application(db: Session, student: User, application_id: int) -> dict:
     return _to_out(db, _get_owned_application(db, student, application_id))
 
 
+def list_application_events(
+    db: Session,
+    student: User,
+    application_id: int,
+) -> list[dict]:
+    _get_owned_application(db, student, application_id)
+    rows = db.execute(
+        select(ApplicationEvent, User.name, User.role)
+        .join(User, ApplicationEvent.actor_id == User.user_id, isouter=True)
+        .where(ApplicationEvent.application_id == application_id)
+        .order_by(ApplicationEvent.created_at.asc(), ApplicationEvent.event_id.asc())
+    ).all()
+    return [
+        {
+            "event_id": event.event_id,
+            "application_id": event.application_id,
+            "actor_id": event.actor_id,
+            "actor_name": actor_name,
+            "actor_role": actor_role,
+            "event_type": event.event_type,
+            "from_status": event.from_status,
+            "to_status": event.to_status,
+            "detail": event.detail,
+            "created_at": event.created_at,
+        }
+        for event, actor_name, actor_role in rows
+    ]
+
+
 def update_draft(db: Session, student: User, application_id: int, data: ApplicationUpdate) -> dict:
     app = _get_owned_application(db, student, application_id)
     _ensure_editable(db, app)
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(app, key, value)
+    write_application_event(
+        db,
+        application_id,
+        student.user_id,
+        "DRAFT_UPDATED",
+        from_status="DRAFT",
+        to_status="DRAFT",
+        detail="更新申請草稿",
+    )
     db.commit()
     db.refresh(app)
     return _to_out(db, app)
@@ -303,9 +375,20 @@ def save_text_document(
             content_text=content,
         )
         db.add(document)
+        event_type = "DOCUMENT_CREATED"
     else:
         document.title = data.title.strip()
         document.content_text = content
+        event_type = "DOCUMENT_UPDATED"
+    write_application_event(
+        db,
+        application_id,
+        student.user_id,
+        event_type,
+        from_status=app.status,
+        to_status=app.status,
+        detail=f"文字文件：{data.title.strip()}",
+    )
     db.commit()
     db.refresh(document)
     return document
@@ -322,7 +405,17 @@ def delete_document(
     document = db.get(ApplicationDocument, document_id)
     if document is None or document.application_id != application_id:
         raise HTTPException(status_code=404, detail="找不到文件")
+    title = document.title
     db.delete(document)
+    write_application_event(
+        db,
+        application_id,
+        student.user_id,
+        "DOCUMENT_DELETED",
+        from_status=app.status,
+        to_status=app.status,
+        detail=f"刪除文字文件：{title}",
+    )
     db.commit()
 
 
@@ -378,8 +471,19 @@ def create_supplement_request(
         deadline=deadline,
         status="REQUESTED",
     )
+    previous_status = app.status
     app.status = "NEED_SUPPLEMENT"
     db.add(request)
+    db.flush()
+    write_application_event(
+        db,
+        application_id,
+        reviewer.user_id,
+        "SUPPLEMENT_REQUESTED",
+        from_status=previous_status,
+        to_status="NEED_SUPPLEMENT",
+        detail=request.required_items,
+    )
     db.commit()
     db.refresh(request)
     ncs_service.create_notification(
@@ -425,6 +529,15 @@ def submit_supplement(
     request.status = "SUBMITTED"
     request.submitted_at = datetime.now()
     app.status = "UNDER_REVIEW"
+    write_application_event(
+        db,
+        application_id,
+        student.user_id,
+        "SUPPLEMENT_SUBMITTED",
+        from_status="NEED_SUPPLEMENT",
+        to_status="UNDER_REVIEW",
+        detail="學生已提交補件內容",
+    )
     db.commit()
     db.refresh(request)
     ncs_service.create_notification(
@@ -464,6 +577,15 @@ def submit_application(db: Session, student: User, application_id: int) -> dict:
         raise HTTPException(status_code=400, detail="請至少提交一份文字文件")
     app.status = "UNDER_REVIEW"
     app.submitted_at = datetime.now()
+    write_application_event(
+        db,
+        application_id,
+        student.user_id,
+        "APPLICATION_SUBMITTED",
+        from_status="DRAFT",
+        to_status="UNDER_REVIEW",
+        detail="正式送出申請",
+    )
     db.commit()
     db.refresh(app)
     ncs_service.create_notification(
@@ -495,7 +617,17 @@ def set_application_status(db: Session, application_id: int, new_status: str, co
     app = db.get(Application, application_id)
     if app is None:
         raise HTTPException(status_code=404, detail="找不到申請案")
+    old_status = app.status
     app.status = new_status
+    write_application_event(
+        db,
+        application_id,
+        None,
+        "STATUS_CHANGED",
+        from_status=old_status,
+        to_status=new_status,
+        detail="系統更新申請狀態",
+    )
     if commit:
         db.commit()
     return app

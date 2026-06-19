@@ -14,6 +14,7 @@ from app.modules.ncs.models import Notification
 from app.modules.sas.models import (
     Application,
     ApplicationDocument,
+    ApplicationEvent,
     StudentProfile,
     SupplementRequest,
 )
@@ -37,6 +38,7 @@ def db_session():
             Scholarship.__table__,
             Application.__table__,
             ApplicationDocument.__table__,
+            ApplicationEvent.__table__,
             SupplementRequest.__table__,
             StudentProfile.__table__,
             Notification.__table__,
@@ -566,3 +568,55 @@ def test_expired_or_other_students_supplement_cannot_be_submitted(client, db_ses
     assert other_response.status_code == 404
     assert expired_response.status_code == 409
     assert expired_response.json()["detail"] == "已超過補件期限"
+
+
+def test_application_events_record_progress_and_are_owner_only(client, db_session):
+    student = create_student(db_session, "event-owner")
+    other = create_student(db_session, "event-other")
+    scholarship = create_scholarship(db_session)
+    draft = client.post(
+        "/api/sas/applications",
+        headers=headers(student),
+        json=complete_payload(scholarship.scholarship_id),
+    ).json()
+    application_id = draft["application_id"]
+    client.put(
+        f"/api/sas/applications/{application_id}",
+        headers=headers(student),
+        json={"academic_note": "更新學業說明"},
+    )
+    client.post(
+        f"/api/sas/applications/{application_id}/documents",
+        headers=headers(student),
+        json={
+            "document_type": "AUTOBIOGRAPHY",
+            "title": "自傳",
+            "content_text": "事件測試自傳內容",
+        },
+    )
+    client.post(
+        f"/api/sas/applications/{application_id}/submit",
+        headers=headers(student),
+    )
+
+    response = client.get(
+        f"/api/sas/applications/{application_id}/events",
+        headers=headers(student),
+    )
+    other_response = client.get(
+        f"/api/sas/applications/{application_id}/events",
+        headers=headers(other),
+    )
+
+    assert response.status_code == 200
+    events = response.json()
+    assert [event["event_type"] for event in events] == [
+        "DRAFT_CREATED",
+        "DRAFT_UPDATED",
+        "DOCUMENT_CREATED",
+        "APPLICATION_SUBMITTED",
+    ]
+    assert events[-1]["from_status"] == "DRAFT"
+    assert events[-1]["to_status"] == "UNDER_REVIEW"
+    assert events[0]["actor_name"] == student.name
+    assert other_response.status_code == 404

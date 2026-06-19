@@ -96,6 +96,21 @@ CREATE TABLE IF NOT EXISTS supplement_requests (
         REFERENCES users(user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS application_events (
+    event_id       INT AUTO_INCREMENT PRIMARY KEY,
+    application_id INT NOT NULL,
+    actor_id       INT NULL,
+    event_type     VARCHAR(50) NOT NULL,
+    from_status    VARCHAR(20) NULL,
+    to_status      VARCHAR(20) NULL,
+    detail         VARCHAR(500) NULL,
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_event_application FOREIGN KEY (application_id)
+        REFERENCES applications(application_id) ON DELETE CASCADE,
+    CONSTRAINT fk_event_actor FOREIGN KEY (actor_id)
+        REFERENCES users(user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='student_profiles' AND column_name='grade');
 SET @s := IF(@c=0, 'ALTER TABLE student_profiles ADD COLUMN grade VARCHAR(20) NULL', 'SELECT 1');
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;

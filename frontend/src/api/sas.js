@@ -54,6 +54,21 @@ export function getApplication(applicationId) {
   return http.get(`/sas/applications/${applicationId}`).then((response) => response.data)
 }
 
+export function listApplicationEvents(applicationId) {
+  return http.get(`/sas/applications/${applicationId}/events`).then((response) =>
+    response.data.map((event) => ({
+      id: event.event_id,
+      action: event.event_type,
+      actorName: event.actor_name || '系統',
+      actorRole: event.actor_role || 'SYSTEM',
+      fromStatus: event.from_status,
+      toStatus: event.to_status,
+      comment: event.detail,
+      createdAt: event.created_at,
+    })),
+  )
+}
+
 export function createApplication(studentId, data) {
   if (useMockApi) return mock.createApplication(studentId, data)
   return http.post('/sas/applications', data).then((response) => response.data)

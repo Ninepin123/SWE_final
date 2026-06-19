@@ -82,6 +82,11 @@
 ### GET /api/sas/applications/{id}  （僅申請學生）
 - 查詢自己的單筆申請或草稿。
 
+### GET /api/sas/applications/{id}/events  （僅申請學生）
+- 查詢自己的申請進度與重要操作紀錄。
+- 記錄草稿建立/修改、文字文件異動、正式送出、補件要求、補件提交及狀態變更。
+- Response 包含操作者、事件類型、前後狀態、摘要與時間；不複製完整敏感文件內容。
+
 ### GET /api/sas/applications/{id}/documents  （僅申請學生）
 - 查詢自己的申請文字文件。
 

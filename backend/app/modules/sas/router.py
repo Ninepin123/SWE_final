@@ -14,6 +14,7 @@ from app.modules.sas.schemas import (
     ApplicationCreate,
     ApplicationDocumentOut,
     ApplicationDocumentWrite,
+    ApplicationEventOut,
     ApplicationOut,
     ApplicationUpdate,
     ProfileOut,
@@ -69,6 +70,18 @@ def get_application(
     student: User = Depends(require_roles("STUDENT")),
 ):
     return service.get_my_application(db, student, application_id)
+
+
+@router.get(
+    "/applications/{application_id}/events",
+    response_model=list[ApplicationEventOut],
+)
+def list_application_events(
+    application_id: int,
+    db: Session = Depends(get_db),
+    student: User = Depends(require_roles("STUDENT")),
+):
+    return service.list_application_events(db, student, application_id)
 
 
 @router.put("/applications/{application_id}", response_model=ApplicationOut)

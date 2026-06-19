@@ -75,6 +75,19 @@ class SupplementRequestOut(BaseModel):
     can_submit: bool
 
 
+class ApplicationEventOut(BaseModel):
+    event_id: int
+    application_id: int
+    actor_id: int | None = None
+    actor_name: str | None = None
+    actor_role: str | None = None
+    event_type: str
+    from_status: str | None = None
+    to_status: str | None = None
+    detail: str | None = None
+    created_at: datetime
+
+
 class ProfileOut(BaseModel):
     # 唯讀身分資料（來自 users）
     user_id: int

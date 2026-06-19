@@ -77,3 +77,18 @@ class SupplementRequest(Base):
     response_text: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class ApplicationEvent(Base):
+    __tablename__ = "application_events"
+
+    event_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    application_id: Mapped[int] = mapped_column(
+        ForeignKey("applications.application_id"), nullable=False
+    )
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.user_id"))
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    from_status: Mapped[str | None] = mapped_column(String(20))
+    to_status: Mapped[str | None] = mapped_column(String(20))
+    detail: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
