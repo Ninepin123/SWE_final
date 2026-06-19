@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS users (
     gpa         DECIMAL(3,2) NULL,
     department  VARCHAR(100) NULL,
     status      ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
+    -- AAS003 單一登入：目前有效 session 識別碼（JWT jti）與到期時間（供 AAS015 線上人數）
+    session_token       VARCHAR(64) NULL,
+    session_expires_at  DATETIME NULL,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_users_unit FOREIGN KEY (unit_id) REFERENCES units(unit_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -1,17 +1,24 @@
-"""AAS — 商業邏輯層（登入驗證、帳號 CRUD、稽核紀錄）。"""
-from datetime import datetime
+"""AAS — 商業邏輯層（登入驗證、帳號 CRUD、稽核紀錄、單一登入 session）。"""
+import uuid
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.modules.aas.models import AuditLog, User
 from app.modules.aas.schemas import UserCreate, UserUpdate
 from app.modules.aas.security import hash_password, verify_password
 
 VALID_ROLES = {"STUDENT", "TEACHER", "SPONSOR", "REVIEWER", "ADMIN"}
 VALID_STATUS = {"ACTIVE", "DISABLED"}
+
+
+def _utcnow() -> datetime:
+    """以 naive UTC 儲存/比較 session 到期時間，避免 tz-aware 與資料庫欄位混用。"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def authenticate(db: Session, account: str, password: str) -> User:
@@ -21,6 +28,36 @@ def authenticate(db: Session, account: str, password: str) -> User:
     if user.status != "ACTIVE":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="帳號已停用")
     return user
+
+
+def start_session(db: Session, user: User) -> str:
+    """AAS003：登入時建立新的 session 識別碼並輪替舊值（使其他裝置的 token 失效）。"""
+    jti = uuid.uuid4().hex
+    user.session_token = jti
+    user.session_expires_at = _utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
+    db.commit()
+    return jti
+
+
+def end_session(db: Session, user: User) -> None:
+    """登出：清空 session，使現有 token 立即失效。"""
+    user.session_token = None
+    user.session_expires_at = None
+    db.commit()
+
+
+def count_online_users(db: Session) -> int:
+    """AAS015：線上人數 = 仍有有效 session（未過期）的帳號數。"""
+    return int(
+        db.scalar(
+            select(func.count(User.user_id)).where(
+                User.session_token.is_not(None),
+                User.session_expires_at.is_not(None),
+                User.session_expires_at > _utcnow(),
+            )
+        )
+        or 0
+    )
 
 
 def write_login_audit(db: Session, account: str, success: bool, detail: str) -> AuditLog:

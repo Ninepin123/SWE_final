@@ -67,3 +67,29 @@ class AuditLogOut(BaseModel):
     target_id: int | None = None
     detail: str | None = None
     created_at: datetime
+
+
+# AAS015-016 系統維運監控
+class ServerLoadOut(BaseModel):
+    cpu_percent: float
+    memory_percent: float
+    memory_used_mb: float
+    memory_total_mb: float
+
+
+class MonitoringAlertOut(BaseModel):
+    level: str          # CRITICAL / WARNING
+    code: str
+    message: str
+
+
+class MonitoringMetricsOut(BaseModel):
+    online_users: int
+    total_users: int
+    uptime_seconds: float
+    requests_total: int
+    errors_total: int
+    error_rate: float
+    login_failures_total: int
+    server_load: ServerLoadOut | None = None
+    alerts: list[MonitoringAlertOut] = []

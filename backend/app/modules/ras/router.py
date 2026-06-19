@@ -87,3 +87,15 @@ def export_statistics(
     )
 
 
+@router.get("/statistics/export/pdf")
+def export_statistics_pdf(
+    year: int | None = None,
+    db: Session = Depends(get_db),
+    reviewer: User = Depends(require_roles("REVIEWER", "ADMIN")),
+):
+    pdf_bytes = service.export_statistics_pdf(db, reviewer, year)
+    filename = f"statistics_{year}.pdf" if year else "statistics_all.pdf"
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
+    return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
+
+

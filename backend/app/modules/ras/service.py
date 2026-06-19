@@ -276,7 +276,11 @@ def export_statistics_csv(db: Session, reviewer: User, year: int | None = None) 
         is_approved = row.status == "APPROVED"
         amount = int(row.amount) if is_approved else 0
         status_label = status_map.get(row.status, row.status)
-            
+
+        if is_approved:
+            total_winners += 1
+            total_amount += amount
+
         writer.writerow([
             row.student_account,
             row.student_name,
@@ -285,7 +289,7 @@ def export_statistics_csv(db: Session, reviewer: User, year: int | None = None) 
             amount,
             status_label
         ])
-        
+
     total_apps = len(rows)
     pass_rate = round((total_winners / total_apps) * 100, 2) if total_apps > 0 else 0.0
             
@@ -311,3 +315,72 @@ def export_statistics_csv(db: Session, reviewer: User, year: int | None = None) 
         ])
 
     return output.getvalue()
+
+
+def export_statistics_pdf(db: Session, reviewer: User, year: int | None = None) -> bytes:
+    """RAS016-017：年度統計報表 PDF 匯出（支援中文，使用 reportlab 內建 CID 字型）。"""
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import mm
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+        from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+        )
+    except ImportError:  # pragma: no cover - 僅在未安裝 reportlab 時觸發
+        raise HTTPException(status_code=503, detail="PDF 匯出服務未啟用（缺少 reportlab）")
+
+    import io
+
+    font_name = "STSong-Light"  # reportlab 內建中日韓字型，免外掛字型檔
+    pdfmetrics.registerFont(UnicodeCIDFont(font_name))
+
+    stats = get_annual_statistics(db, reviewer, year)
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("CJKTitle", parent=styles["Title"], fontName=font_name)
+    normal = ParagraphStyle("CJKNormal", parent=styles["Normal"], fontName=font_name, fontSize=11, leading=18)
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, title="獎助學金統計報表")
+    story = []
+
+    year_label = f"{year} 學年度" if year else "全部年度"
+    story.append(Paragraph(f"高雄大學獎助學金統計報表（{year_label}）", title_style))
+    story.append(Spacer(1, 8 * mm))
+    story.append(Paragraph(f"核發總人數：{stats['total_winners']} 人", normal))
+    story.append(Paragraph(f"核發總金額：NT$ {stats['total_amount']:,}", normal))
+    story.append(Spacer(1, 6 * mm))
+    story.append(Paragraph("各單位統計", normal))
+    story.append(Spacer(1, 3 * mm))
+
+    table_data = [["提供單位", "申請總數", "核發人數", "通過比例"]]
+    for unit in stats["unit_stats"]:
+        table_data.append([
+            unit["unit_name"],
+            str(unit["total_applications"]),
+            str(unit["approved_count"]),
+            f"{unit['pass_rate']}%",
+        ])
+    if len(table_data) == 1:
+        table_data.append(["（無資料）", "-", "-", "-"])
+
+    table = Table(table_data, colWidths=[70 * mm, 30 * mm, 30 * mm, 30 * mm])
+    table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), font_name),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2f6b4f")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f6f3")]),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(table)
+
+    doc.build(story)
+    return buf.getvalue()

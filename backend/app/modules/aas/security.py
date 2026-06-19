@@ -29,11 +29,14 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-def create_access_token(user_id: int, role: str) -> str:
+def create_access_token(user_id: int, role: str, jti: str | None = None) -> str:
+    """簽發 JWT。jti（session 識別碼）用於 AAS003 單一登入；省略時為一般無狀態 token。"""
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=settings.access_token_expire_minutes
     )
     payload = {"sub": str(user_id), "role": role, "exp": expire}
+    if jti is not None:
+        payload["jti"] = jti
     return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
 
 
@@ -47,6 +50,11 @@ def get_current_user(
         detail="登入憑證無效或已過期",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    session_exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="帳號已在其他裝置登入，此連線已失效",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
         payload = jwt.decode(creds.credentials, settings.secret_key, algorithms=[ALGORITHM])
         user_id = int(payload.get("sub"))
@@ -55,6 +63,15 @@ def get_current_user(
     user = db.get(User, user_id)
     if user is None or user.status != "ACTIVE":
         raise cred_exc
+    # AAS003 單一登入：登入流程簽發的 token 帶 jti，必須與帳號目前的 session_token 相符。
+    # 重新登入（輪替）或登出（清空）都會使先前的 token 失效。
+    token_jti = payload.get("jti")
+    if user.session_token is not None:
+        if token_jti != user.session_token:
+            raise session_exc
+    elif token_jti is not None:
+        # 帳號已登出（session 已清空），但 token 仍帶 jti → 視為失效
+        raise session_exc
     return user
 
 

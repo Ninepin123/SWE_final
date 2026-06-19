@@ -30,6 +30,10 @@ class User(Base):
     gpa: Mapped[float | None] = mapped_column(Numeric(3, 2))
     department: Mapped[str | None] = mapped_column(String(100))
     status: Mapped[str] = mapped_column(String(10), nullable=False, default="ACTIVE")
+    # AAS003 單一登入：目前有效的 session 識別碼（寫入 JWT 的 jti）；
+    # 重新登入會輪替此值使舊 token 失效，登出則清空。session_expires_at 供線上人數統計(AAS015)。
+    session_token: Mapped[str | None] = mapped_column(String(64))
+    session_expires_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

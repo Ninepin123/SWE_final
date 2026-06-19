@@ -9,6 +9,8 @@ python-multipart>=0.0.9     # 文件上傳（SAS 6.2.4）
 passlib[bcrypt]>=1.7        # 密碼雜湊（AAS）
 bcrypt==4.0.1
 python-jose[cryptography]>=3.3  # JWT（AAS 登入）
+psutil>=5.9                 # 系統維運監控（AAS015-016 伺服器負載）
+reportlab>=4.0              # 統計報表 PDF 匯出（RAS016-017，含中文 CID 字型）
 
 # 測試
 pytest>=8.0
