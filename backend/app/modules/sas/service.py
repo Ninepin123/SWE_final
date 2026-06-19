@@ -13,12 +13,18 @@ from sqlalchemy.orm import Session
 
 from app.modules.aas.models import Unit, User
 from app.modules.ncs import service as ncs_service
-from app.modules.sas.models import Application, StudentProfile
-from app.modules.sas.schemas import ApplicationCreate, ApplicationUpdate, ProfileUpdate
+from app.modules.sas.models import Application, ApplicationDocument, StudentProfile
+from app.modules.sas.schemas import (
+    ApplicationCreate,
+    ApplicationDocumentWrite,
+    ApplicationUpdate,
+    ProfileUpdate,
+)
 from app.modules.sms.models import Scholarship
 
 VALID_STATUSES = {"DRAFT", "UNDER_REVIEW", "NEED_SUPPLEMENT", "APPROVED", "REJECTED"}
 VALID_CATEGORIES = {"SCHOOL", "GOVERNMENT", "PRIVATE", "LOW_INCOME", "MERIT", "OTHER"}
+VALID_DOCUMENT_TYPES = {"TRANSCRIPT", "AUTOBIOGRAPHY", "CERTIFICATE", "OTHER"}
 
 
 def _naive(dt: datetime | None) -> datetime | None:
@@ -252,6 +258,67 @@ def update_draft(db: Session, student: User, application_id: int, data: Applicat
     return _to_out(db, app)
 
 
+def list_documents(db: Session, student: User, application_id: int) -> list[ApplicationDocument]:
+    _get_owned_application(db, student, application_id)
+    return list(
+        db.scalars(
+            select(ApplicationDocument)
+            .where(ApplicationDocument.application_id == application_id)
+            .order_by(ApplicationDocument.document_id)
+        )
+    )
+
+
+def save_text_document(
+    db: Session,
+    student: User,
+    application_id: int,
+    data: ApplicationDocumentWrite,
+) -> ApplicationDocument:
+    app = _get_owned_application(db, student, application_id)
+    _ensure_editable(db, app)
+    if data.document_type not in VALID_DOCUMENT_TYPES:
+        raise HTTPException(status_code=400, detail="文件類型不存在")
+    content = data.content_text.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="文件內容不可為空")
+    document = db.scalar(
+        select(ApplicationDocument).where(
+            ApplicationDocument.application_id == application_id,
+            ApplicationDocument.document_type == data.document_type,
+        )
+    )
+    if document is None:
+        document = ApplicationDocument(
+            application_id=application_id,
+            document_type=data.document_type,
+            title=data.title.strip(),
+            content_text=content,
+        )
+        db.add(document)
+    else:
+        document.title = data.title.strip()
+        document.content_text = content
+    db.commit()
+    db.refresh(document)
+    return document
+
+
+def delete_document(
+    db: Session,
+    student: User,
+    application_id: int,
+    document_id: int,
+) -> None:
+    app = _get_owned_application(db, student, application_id)
+    _ensure_editable(db, app)
+    document = db.get(ApplicationDocument, document_id)
+    if document is None or document.application_id != application_id:
+        raise HTTPException(status_code=404, detail="找不到文件")
+    db.delete(document)
+    db.commit()
+
+
 def submit_application(db: Session, student: User, application_id: int) -> dict:
     app = _get_owned_application(db, student, application_id)
     scholarship = _ensure_editable(db, app)
@@ -269,6 +336,14 @@ def submit_application(db: Session, student: User, application_id: int) -> dict:
             missing.append(label)
     if missing:
         raise HTTPException(status_code=400, detail=f"申請資料不完整：{ '、'.join(missing) }")
+    document_count = db.scalar(
+        select(func.count(ApplicationDocument.document_id)).where(
+            ApplicationDocument.application_id == application_id,
+            func.length(func.trim(ApplicationDocument.content_text)) > 0,
+        )
+    ) or 0
+    if document_count == 0:
+        raise HTTPException(status_code=400, detail="請至少提交一份文字文件")
     app.status = "UNDER_REVIEW"
     app.submitted_at = datetime.now()
     db.commit()

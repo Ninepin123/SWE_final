@@ -12,6 +12,8 @@ from app.modules.aas.security import require_roles
 from app.modules.sas import service
 from app.modules.sas.schemas import (
     ApplicationCreate,
+    ApplicationDocumentOut,
+    ApplicationDocumentWrite,
     ApplicationOut,
     ApplicationUpdate,
     ProfileOut,
@@ -83,6 +85,42 @@ def submit_application(
     student: User = Depends(require_roles("STUDENT")),
 ):
     return service.submit_application(db, student, application_id)
+
+
+@router.get(
+    "/applications/{application_id}/documents",
+    response_model=list[ApplicationDocumentOut],
+)
+def list_documents(
+    application_id: int,
+    db: Session = Depends(get_db),
+    student: User = Depends(require_roles("STUDENT")),
+):
+    return service.list_documents(db, student, application_id)
+
+
+@router.post(
+    "/applications/{application_id}/documents",
+    response_model=ApplicationDocumentOut,
+)
+def save_document(
+    application_id: int,
+    body: ApplicationDocumentWrite,
+    db: Session = Depends(get_db),
+    student: User = Depends(require_roles("STUDENT")),
+):
+    return service.save_text_document(db, student, application_id, body)
+
+
+@router.delete("/applications/{application_id}/documents/{document_id}")
+def delete_document(
+    application_id: int,
+    document_id: int,
+    db: Session = Depends(get_db),
+    student: User = Depends(require_roles("STUDENT")),
+):
+    service.delete_document(db, student, application_id, document_id)
+    return {"detail": "已刪除文字文件"}
 
 
 @router.get("/profile", response_model=ProfileOut)

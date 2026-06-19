@@ -75,12 +75,25 @@
 - Request：`{ statement?, contact_phone?, address?, household_status?, academic_note? }`
 
 ### POST /api/sas/applications/{id}/submit  （僅申請學生）
-- 正式送出草稿；重新檢查資格、期限及申請表必填欄位。
+- 正式送出草稿；重新檢查資格、期限、申請表必填欄位及至少一份文字文件。
 - 成功後狀態由 `DRAFT` 改為 `UNDER_REVIEW`，寫入 `submitted_at` 並發送通知。
 - 正式送出後不可再次修改或重複送出。
 
 ### GET /api/sas/applications/{id}  （僅申請學生）
 - 查詢自己的單筆申請或草稿。
+
+### GET /api/sas/applications/{id}/documents  （僅申請學生）
+- 查詢自己的申請文字文件。
+
+### POST /api/sas/applications/{id}/documents  （僅申請學生）
+- 新增或更新同類型文字文件。
+- Request：`{ document_type, title, content_text }`
+- `document_type`：`TRANSCRIPT / AUTOBIOGRAPHY / CERTIFICATE / OTHER`
+- 目前只儲存文字內容；資料表預留實體檔案路徑、MIME type 與檔案大小欄位。
+
+### DELETE /api/sas/applications/{id}/documents/{document_id}
+- 刪除自己的草稿文件。
+- 正式送出、申請截止或獎學金關閉後禁止修改與刪除。
 
 ### GET /api/sas/applications/me  （僅 STUDENT）
 - Response：`ApplicationOut[]`

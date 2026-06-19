@@ -9,8 +9,10 @@ import StatusBadge from '@/components/common/StatusBadge.vue'
 import {
   createApplication,
   getProfile,
+  listApplicationDocuments,
   listAvailableScholarships,
   listMyApplications,
+  saveApplicationDocument,
   submitApplication,
   updateApplication,
 } from '@/api/sas'
@@ -22,7 +24,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const toast = useToastStore()
 
-const steps = ['聯絡資料', '申請內容', '確認送出']
+const steps = ['聯絡資料', '申請內容', '文字文件', '確認送出']
 const currentStep = ref(0)
 const loading = ref(true)
 const saving = ref(false)
@@ -38,6 +40,20 @@ const form = reactive({
   household_status: '',
   academic_note: '',
   statement: '',
+  documents: {
+    TRANSCRIPT: {
+      title: '成績單內容',
+      content_text: '',
+    },
+    AUTOBIOGRAPHY: {
+      title: '自傳',
+      content_text: '',
+    },
+    CERTIFICATE: {
+      title: '證明文件說明',
+      content_text: '',
+    },
+  },
 })
 
 const isDraft = computed(() => !!applicationId.value && !existingSubmitted.value)
@@ -61,6 +77,11 @@ function validateStep(step = currentStep.value) {
     (!form.household_status.trim() || form.statement.trim().length < 20)
   ) {
     error.value = '請填寫家庭狀況，且申請理由至少需 20 個字。'
+  } else if (
+    step === 2 &&
+    !Object.values(form.documents).some((document) => document.content_text.trim())
+  ) {
+    error.value = '請至少填寫一份文字文件。'
   }
   return !error.value
 }
@@ -90,7 +111,15 @@ async function saveDraft(showMessage = true) {
       })
       applicationId.value = saved.application_id
     }
-    if (showMessage) toast.success('草稿已儲存')
+    for (const [documentType, document] of Object.entries(form.documents)) {
+      if (!document.content_text.trim()) continue
+      await saveApplicationDocument(applicationId.value, {
+        document_type: documentType,
+        title: document.title,
+        content_text: document.content_text,
+      })
+    }
+    if (showMessage) toast.success('草稿與文字文件已儲存')
     return saved
   } catch (saveError) {
     error.value = saveError.response?.data?.detail || saveError.message || '草稿儲存失敗'
@@ -101,7 +130,7 @@ async function saveDraft(showMessage = true) {
 }
 
 async function submit() {
-  if (!validateStep(0) || !validateStep(1)) return
+  if (!validateStep(0) || !validateStep(1) || !validateStep(2)) return
   if (!window.confirm('正式送出後將無法修改申請資料，確定送出嗎？')) return
   submitting.value = true
   try {
@@ -144,6 +173,13 @@ onMounted(async () => {
         academic_note: existing.academic_note ?? '',
         statement: existing.statement ?? '',
       })
+      const documents = await listApplicationDocuments(applicationId.value)
+      for (const document of documents) {
+        if (form.documents[document.document_type]) {
+          form.documents[document.document_type].title = document.title
+          form.documents[document.document_type].content_text = document.content_text
+        }
+      }
     } else {
       form.contact_phone = profile.contact_phone ?? profile.phone ?? ''
       form.address = profile.address ?? ''
@@ -213,6 +249,38 @@ onMounted(async () => {
     </BaseCard>
 
     <BaseCard v-if="currentStep === 2" title="確認送出">
+      <div class="form-grid">
+        <label class="form-grid__wide">
+          <span>成績單內容</span>
+          <textarea
+            v-model="form.documents.TRANSCRIPT.content_text"
+            rows="5"
+            placeholder="請以文字整理主要科目、成績、排名或 GPA 說明"
+          />
+        </label>
+        <label class="form-grid__wide">
+          <span>自傳</span>
+          <textarea
+            v-model="form.documents.AUTOBIOGRAPHY.content_text"
+            rows="7"
+            placeholder="請輸入自傳內容"
+          />
+        </label>
+        <label class="form-grid__wide">
+          <span>其他證明文件說明</span>
+          <textarea
+            v-model="form.documents.CERTIFICATE.content_text"
+            rows="5"
+            placeholder="請描述相關證明、獎項或經歷"
+          />
+        </label>
+      </div>
+      <p class="muted-text">
+        目前以文字內容代替實體附件；之後可沿用相同文件類型整合檔案上傳。
+      </p>
+    </BaseCard>
+
+    <BaseCard v-if="currentStep === 3" title="確認送出">
       <dl class="review-list">
         <div>
           <dt>獎學金</dt>
@@ -229,6 +297,16 @@ onMounted(async () => {
         <div>
           <dt>申請理由</dt>
           <dd>{{ form.statement }}</dd>
+        </div>
+        <div>
+          <dt>文字文件</dt>
+          <dd>
+            {{
+              Object.values(form.documents).filter((document) => document.content_text.trim())
+                .length
+            }}
+            份
+          </dd>
         </div>
       </dl>
       <p class="muted-text">正式送出後不能再修改；若尚未完成，可以先儲存草稿。</p>

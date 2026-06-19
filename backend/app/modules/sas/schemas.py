@@ -37,6 +37,22 @@ class ApplicationOut(BaseModel):
     can_edit: bool
 
 
+class ApplicationDocumentWrite(BaseModel):
+    document_type: str
+    title: str = Field(min_length=1, max_length=100)
+    content_text: str = Field(min_length=1, max_length=20000)
+
+
+class ApplicationDocumentOut(BaseModel):
+    document_id: int
+    application_id: int
+    document_type: str
+    title: str
+    content_text: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class ProfileOut(BaseModel):
     # 唯讀身分資料（來自 users）
     user_id: int

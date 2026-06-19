@@ -62,6 +62,24 @@ CREATE TABLE IF NOT EXISTS student_profiles (
     CONSTRAINT fk_profile_user FOREIGN KEY (user_id) REFERENCES users(user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 文字文件替代版（SAS017-SAS020）。
+-- content_text 為目前使用欄位；storage_path/mime_type/file_size 預留未來實體附件整合。
+CREATE TABLE IF NOT EXISTS application_documents (
+    document_id    INT AUTO_INCREMENT PRIMARY KEY,
+    application_id INT NOT NULL,
+    document_type  ENUM('TRANSCRIPT','AUTOBIOGRAPHY','CERTIFICATE','OTHER') NOT NULL,
+    title          VARCHAR(100) NOT NULL,
+    content_text   TEXT NOT NULL,
+    storage_path   VARCHAR(500) NULL,
+    mime_type      VARCHAR(100) NULL,
+    file_size      INT NULL,
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_application_document_type UNIQUE (application_id, document_type),
+    CONSTRAINT fk_document_application FOREIGN KEY (application_id)
+        REFERENCES applications(application_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='student_profiles' AND column_name='grade');
 SET @s := IF(@c=0, 'ALTER TABLE student_profiles ADD COLUMN grade VARCHAR(20) NULL', 'SELECT 1');
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;

@@ -11,7 +11,7 @@ from app.core.database import Base, get_db
 from app.modules.aas.models import Unit, User
 from app.modules.aas.security import create_access_token, hash_password
 from app.modules.ncs.models import Notification
-from app.modules.sas.models import Application, StudentProfile
+from app.modules.sas.models import Application, ApplicationDocument, StudentProfile
 from app.modules.sas.router import router
 from app.modules.sms.models import Scholarship
 
@@ -31,6 +31,7 @@ def db_session():
             User.__table__,
             Scholarship.__table__,
             Application.__table__,
+            ApplicationDocument.__table__,
             StudentProfile.__table__,
             Notification.__table__,
         ],
@@ -133,6 +134,17 @@ def test_student_can_create_update_and_submit_draft(client, db_session):
     assert update_response.status_code == 200
     assert update_response.json()["contact_phone"] == "0912345678"
 
+    document_response = client.post(
+        f"/api/sas/applications/{draft['application_id']}/documents",
+        headers=headers(student),
+        json={
+            "document_type": "AUTOBIOGRAPHY",
+            "title": "自傳",
+            "content_text": "這是一份用於申請的文字自傳內容。",
+        },
+    )
+    assert document_response.status_code == 200
+
     submit_response = client.post(
         f"/api/sas/applications/{draft['application_id']}/submit",
         headers=headers(student),
@@ -178,6 +190,15 @@ def test_submitted_application_cannot_be_edited_or_submitted_again(client, db_se
         json=complete_payload(scholarship.scholarship_id),
     )
     application_id = create_response.json()["application_id"]
+    client.post(
+        f"/api/sas/applications/{application_id}/documents",
+        headers=headers(student),
+        json={
+            "document_type": "AUTOBIOGRAPHY",
+            "title": "自傳",
+            "content_text": "完整自傳內容",
+        },
+    )
     client.post(f"/api/sas/applications/{application_id}/submit", headers=headers(student))
 
     update_response = client.put(
@@ -257,3 +278,119 @@ def test_duplicate_draft_is_rejected(client, db_session):
     assert first.status_code == 201
     assert second.status_code == 409
     assert second.json()["detail"] == "此獎學金已有申請或草稿"
+
+
+def test_text_documents_can_be_created_updated_listed_and_deleted(client, db_session):
+    student = create_student(db_session, "student06")
+    scholarship = create_scholarship(db_session)
+    draft = client.post(
+        "/api/sas/applications",
+        headers=headers(student),
+        json={"scholarship_id": scholarship.scholarship_id},
+    ).json()
+    application_id = draft["application_id"]
+
+    create_response = client.post(
+        f"/api/sas/applications/{application_id}/documents",
+        headers=headers(student),
+        json={
+            "document_type": "TRANSCRIPT",
+            "title": "成績單內容",
+            "content_text": "GPA 3.8，班級排名前百分之十。",
+        },
+    )
+    assert create_response.status_code == 200
+    document_id = create_response.json()["document_id"]
+
+    update_response = client.post(
+        f"/api/sas/applications/{application_id}/documents",
+        headers=headers(student),
+        json={
+            "document_type": "TRANSCRIPT",
+            "title": "更新後成績單",
+            "content_text": "GPA 3.8，班級排名前百分之五。",
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["document_id"] == document_id
+    assert update_response.json()["title"] == "更新後成績單"
+
+    list_response = client.get(
+        f"/api/sas/applications/{application_id}/documents",
+        headers=headers(student),
+    )
+    assert list_response.status_code == 200
+    assert len(list_response.json()) == 1
+
+    delete_response = client.delete(
+        f"/api/sas/applications/{application_id}/documents/{document_id}",
+        headers=headers(student),
+    )
+    assert delete_response.status_code == 200
+    assert db_session.get(ApplicationDocument, document_id) is None
+
+
+def test_submit_requires_at_least_one_text_document(client, db_session):
+    student = create_student(db_session, "student07")
+    scholarship = create_scholarship(db_session)
+    draft = client.post(
+        "/api/sas/applications",
+        headers=headers(student),
+        json=complete_payload(scholarship.scholarship_id),
+    ).json()
+
+    response = client.post(
+        f"/api/sas/applications/{draft['application_id']}/submit",
+        headers=headers(student),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "請至少提交一份文字文件"
+
+
+def test_documents_are_owner_only_and_locked_after_submit(client, db_session):
+    owner = create_student(db_session, "student08")
+    other = create_student(db_session, "student09")
+    scholarship = create_scholarship(db_session)
+    draft = client.post(
+        "/api/sas/applications",
+        headers=headers(owner),
+        json=complete_payload(scholarship.scholarship_id),
+    ).json()
+    application_id = draft["application_id"]
+    document = client.post(
+        f"/api/sas/applications/{application_id}/documents",
+        headers=headers(owner),
+        json={
+            "document_type": "AUTOBIOGRAPHY",
+            "title": "自傳",
+            "content_text": "申請用自傳",
+        },
+    ).json()
+
+    other_list = client.get(
+        f"/api/sas/applications/{application_id}/documents",
+        headers=headers(other),
+    )
+    assert other_list.status_code == 404
+
+    client.post(
+        f"/api/sas/applications/{application_id}/submit",
+        headers=headers(owner),
+    )
+    update_after_submit = client.post(
+        f"/api/sas/applications/{application_id}/documents",
+        headers=headers(owner),
+        json={
+            "document_type": "AUTOBIOGRAPHY",
+            "title": "修改自傳",
+            "content_text": "嘗試在送出後修改",
+        },
+    )
+    delete_after_submit = client.delete(
+        f"/api/sas/applications/{application_id}/documents/{document['document_id']}",
+        headers=headers(owner),
+    )
+
+    assert update_after_submit.status_code == 409
+    assert delete_after_submit.status_code == 409

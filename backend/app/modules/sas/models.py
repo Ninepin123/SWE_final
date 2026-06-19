@@ -38,3 +38,26 @@ class StudentProfile(Base):
     emergency_contact_name: Mapped[str | None] = mapped_column(String(100))
     emergency_contact_phone: Mapped[str | None] = mapped_column(String(30))
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ApplicationDocument(Base):
+    __tablename__ = "application_documents"
+    __table_args__ = (
+        UniqueConstraint("application_id", "document_type", name="uq_application_document_type"),
+    )
+
+    document_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    application_id: Mapped[int] = mapped_column(
+        ForeignKey("applications.application_id"), nullable=False
+    )
+    document_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    title: Mapped[str] = mapped_column(String(100), nullable=False)
+    content_text: Mapped[str] = mapped_column(Text, nullable=False)
+    # 預留未來實體檔案整合欄位；目前文字文件不使用。
+    storage_path: Mapped[str | None] = mapped_column(String(500))
+    mime_type: Mapped[str | None] = mapped_column(String(100))
+    file_size: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )

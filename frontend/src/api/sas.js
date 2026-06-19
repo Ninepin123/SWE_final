@@ -67,6 +67,24 @@ export function submitApplication(applicationId) {
   return http.post(`/sas/applications/${applicationId}/submit`).then((response) => response.data)
 }
 
+export function listApplicationDocuments(applicationId) {
+  return http
+    .get(`/sas/applications/${applicationId}/documents`)
+    .then((response) => response.data)
+}
+
+export function saveApplicationDocument(applicationId, data) {
+  return http
+    .post(`/sas/applications/${applicationId}/documents`, data)
+    .then((response) => response.data)
+}
+
+export function deleteApplicationDocument(applicationId, documentId) {
+  return http
+    .delete(`/sas/applications/${applicationId}/documents/${documentId}`)
+    .then((response) => response.data)
+}
+
 export function sendRecommendationReminder(studentId, requestId) {
   return withApiFallback(
     () => http.post(`/sas/recommendations/${requestId}/reminder`),
