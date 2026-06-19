@@ -47,6 +47,12 @@ PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='applications' AND column_name='academic_note');
 SET @s := IF(@c=0, 'ALTER TABLE applications ADD COLUMN academic_note TEXT NULL', 'SELECT 1');
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='applications' AND column_name='supplement_deadline');
+SET @s := IF(@c=0, 'ALTER TABLE applications ADD COLUMN supplement_deadline DATETIME NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='applications' AND column_name='documents');
+SET @s := IF(@c=0, 'ALTER TABLE applications ADD COLUMN documents TEXT NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 
 -- 學生個人資料（6.2.1：學號等核心欄位不可由學生修改，這裡僅放可編輯欄位；身分資料讀 users）
 CREATE TABLE IF NOT EXISTS student_profiles (

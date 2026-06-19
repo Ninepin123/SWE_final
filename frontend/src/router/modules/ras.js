@@ -11,4 +11,22 @@ export default [
       roles: ['REVIEWER'],
     },
   },
+  {
+    path: '/award-list',
+    name: 'ras-award-list',
+    component: () => import('@/views/ras/AwardListView.vue'),
+    meta: {
+      title: '核發名單',
+      roles: ['REVIEWER', 'ADMIN'],
+    },
+  },
+  {
+    path: '/statistics',
+    name: 'ras-statistics',
+    component: () => import('@/views/ras/StatisticsView.vue'),
+    meta: {
+      title: '年度統計與報表',
+      roles: ['REVIEWER', 'ADMIN'],
+    },
+  },
 ]

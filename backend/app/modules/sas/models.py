@@ -21,6 +21,8 @@ class Application(Base):
     address: Mapped[str | None] = mapped_column(String(255))       # 通訊地址
     household_status: Mapped[str | None] = mapped_column(Text)     # 家庭狀況
     academic_note: Mapped[str | None] = mapped_column(Text)        # 在學成績 / 排名說明
+    documents: Mapped[str | None] = mapped_column(Text)            # 上傳之附件(JSON 字串)
+    supplement_deadline: Mapped[datetime | None] = mapped_column(DateTime) # 補件期限
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime)

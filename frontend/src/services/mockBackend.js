@@ -811,7 +811,8 @@ export async function listReviewApplications(params = {}) {
   const state = getState()
   const status = params.status
   const keyword = params.keyword?.trim().toLowerCase()
-  const items = state.applications
+  const sortBy = params.sort_by || 'gpa_desc'
+  let items = state.applications
     .map((application) => hydrateApplication(state, application))
     .filter((application) => {
       const matchedStatus = !status || application.status === status
@@ -822,6 +823,17 @@ export async function listReviewApplications(params = {}) {
           .some((field) => field.toLowerCase().includes(keyword))
       return matchedStatus && matchedKeyword
     })
+    
+  if (sortBy === 'gpa_desc') {
+    items.sort((a, b) => (b.form?.academics?.gpa || 0) - (a.form?.academics?.gpa || 0))
+  } else if (sortBy === 'gpa_asc') {
+    items.sort((a, b) => (a.form?.academics?.gpa || 0) - (b.form?.academics?.gpa || 0))
+  } else if (sortBy === 'time_desc') {
+    items.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
+  } else if (sortBy === 'time_asc') {
+    items.sort((a, b) => new Date(a.submittedAt) - new Date(b.submittedAt))
+  }
+
   return delay(items)
 }
 
@@ -1028,4 +1040,161 @@ export async function getDashboardSummary(user) {
     ).length,
     unread,
   })
+}
+
+export async function getAwardList(params) {
+  const state = getState()
+  const year = params?.year
+  const keyword = params?.keyword?.toLowerCase()
+
+  let apps = state.applications.filter(app => app.status === 'APPROVED')
+  if (year) {
+    apps = apps.filter(app => app.submittedAt?.startsWith(String(year)))
+  }
+
+  const out = []
+  apps.forEach(app => {
+    const student = state.users.find(u => u.id === app.studentId)
+    const profile = state.profiles[app.studentId] || {}
+    const sch = state.scholarships.find(s => s.id === app.scholarshipId)
+    
+    if (student && sch) {
+      if (keyword) {
+        const match = [student.name, student.account, sch.title].some(v => String(v).toLowerCase().includes(keyword))
+        if (!match) return
+      }
+      
+      const audit = app.auditLogs.find(log => log.toStatus === 'APPROVED')
+      out.push({
+        id: app.id,
+        application_id: app.id,
+        student_id: student.id,
+        student_name: student.name,
+        student_account: student.account,
+        department: profile.department || student.unit,
+        scholarship_id: sch.id,
+        scholarship_name: sch.title,
+        year: sch.year || parseInt(sch.deadline?.split('-')[0]) || new Date().getFullYear(),
+        amount: sch.amount || 0,
+        status: app.status,
+        reviewed_at: audit ? audit.createdAt : app.updatedAt
+      })
+    }
+  })
+  return delay(out)
+}
+
+export async function getStatistics(params) {
+  const state = getState()
+  const year = params?.year
+
+  let apps = state.applications
+  if (year) {
+    apps = apps.filter(app => app.submittedAt?.startsWith(String(year)))
+  }
+
+  let total_winners = 0
+  let total_amount = 0
+  const unitStatsMap = {}
+
+  apps.forEach(app => {
+    const sch = state.scholarships.find(s => s.id === app.scholarshipId)
+    if (sch && sch.sponsor) {
+      if (!unitStatsMap[sch.sponsor]) {
+        unitStatsMap[sch.sponsor] = { total: 0, approved: 0 }
+      }
+      unitStatsMap[sch.sponsor].total++
+      
+      if (app.status === 'APPROVED') {
+        unitStatsMap[sch.sponsor].approved++
+        total_winners++
+        total_amount += (sch.amount || 0)
+      }
+    }
+  })
+
+  const unit_stats = Object.entries(unitStatsMap).map(([unit_name, stats]) => {
+    return {
+      unit_name,
+      total_applications: stats.total,
+      approved_count: stats.approved,
+      pass_rate: stats.total > 0 ? parseFloat(((stats.approved / stats.total) * 100).toFixed(2)) : 0
+    }
+  })
+
+  return delay({
+    year,
+    total_winners,
+    total_amount,
+    unit_stats
+  })
+}
+
+export async function exportStatisticsCsvData(params) {
+  const state = getState()
+  const year = params?.year
+
+  let apps = state.applications
+  if (year) {
+    apps = apps.filter(app => app.submittedAt && app.submittedAt.startsWith(String(year)))
+  }
+
+  let csv = "學號,姓名,系所,申請獎學金名稱,預定核發金額,審核狀態\n"
+  
+  let totalWinners = 0
+  let totalAmount = 0
+
+  apps.forEach(app => {
+    const student = state.users.find(u => u.id === app.studentId)
+    const profile = state.profiles[app.studentId] || {}
+    const sch = state.scholarships.find(s => s.id === app.scholarshipId)
+    
+    if (student && sch) {
+      const isApproved = app.status === 'APPROVED'
+      const amount = isApproved ? sch.amount : 0
+      const statusLabel = APPLICATION_STATUS[app.status] || app.status
+      
+      csv += `${student.account},${student.name},${profile.department || student.unit},${sch.title},${amount},${statusLabel}\n`
+      
+      
+      if (isApproved) {
+        totalWinners++
+        totalAmount += amount
+      }
+    }
+  })
+
+  csv += "\n"
+  csv += "【總體統計】\n"
+  const totalApps = apps.length
+  const passRate = totalApps > 0 ? ((totalWinners / totalApps) * 100).toFixed(2) : 0
+  csv += `申請總數,${totalApps}\n`
+  csv += `總計核發人數,${totalWinners}\n`
+  csv += `通過比例,${passRate}%\n`
+  csv += `總計核發金額,${totalAmount}\n`
+
+  csv += "\n"
+  csv += "【各單位統計】\n"
+  csv += "提供單位,申請總數,通過人數,通過比例\n"
+  
+  const unitStats = {}
+  apps.forEach(app => {
+    const sch = state.scholarships.find(s => s.id === app.scholarshipId)
+    if (sch && sch.sponsor) {
+      if (!unitStats[sch.sponsor]) {
+        unitStats[sch.sponsor] = { total: 0, approved: 0 }
+      }
+      unitStats[sch.sponsor].total++
+      if (app.status === 'APPROVED') {
+        unitStats[sch.sponsor].approved++
+      }
+    }
+  })
+
+  Object.entries(unitStats).forEach(([unitName, stats]) => {
+    const rate = stats.total > 0 ? ((stats.approved / stats.total) * 100).toFixed(2) : 0
+    csv += `${unitName},${stats.total},${stats.approved},${rate}%\n`
+  })
+
+  return delay(csv)
 }
