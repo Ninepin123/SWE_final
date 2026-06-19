@@ -19,8 +19,8 @@ jobs:
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
     runs-on: ubuntu-latest
     permissions:
-      contents: write       # allow Claude to push the conflict resolution
-      pull-requests: write  # allow Claude to update the PR
+      contents: read
+      pull-requests: read
       issues: read
       id-token: write
       actions: read # Required for Claude to read CI results on PRs
@@ -28,16 +28,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # full history so Claude can merge/resolve conflicts
+          fetch-depth: 1
 
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-          # Use Claude Opus 4.8
-          claude_args: '--model claude-opus-4-8'
 
           # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
