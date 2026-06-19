@@ -1,4 +1,6 @@
 """AAS — 商業邏輯層（登入驗證、帳號 CRUD、稽核紀錄）。"""
+from datetime import datetime
+
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
@@ -19,6 +21,18 @@ def authenticate(db: Session, account: str, password: str) -> User:
     if user.status != "ACTIVE":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="帳號已停用")
     return user
+
+
+def write_login_audit(db: Session, account: str, success: bool, detail: str) -> AuditLog:
+    user = db.scalar(select(User).where(User.account == account))
+    return write_audit(
+        db,
+        user.user_id if user else None,
+        "LOGIN_SUCCESS" if success else "LOGIN_FAILED",
+        "user",
+        user.user_id if user else None,
+        f"帳號 {account}：{detail}",
+    )
 
 
 def list_users(
@@ -125,13 +139,31 @@ def write_audit(db: Session, actor_id: int | None, action: str, target_type: str
     return log
 
 
-def list_audit_logs(db: Session, limit: int = 200) -> list[dict]:
-    rows = db.execute(
-        select(AuditLog, User.name)
-        .join(User, AuditLog.actor_id == User.user_id, isouter=True)
-        .order_by(AuditLog.created_at.desc())
-        .limit(limit)
-    ).all()
+def list_audit_logs(
+    db: Session,
+    actor_id: int | None = None,
+    action: str | None = None,
+    target_type: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
+    limit: int = 200,
+) -> list[dict]:
+    if limit < 1 or limit > 500:
+        raise HTTPException(status_code=400, detail="查詢筆數需介於 1 到 500")
+    stmt = select(AuditLog, User.name).join(
+        User, AuditLog.actor_id == User.user_id, isouter=True
+    )
+    if actor_id is not None:
+        stmt = stmt.where(AuditLog.actor_id == actor_id)
+    if action and action.strip():
+        stmt = stmt.where(AuditLog.action == action.strip())
+    if target_type and target_type.strip():
+        stmt = stmt.where(AuditLog.target_type == target_type.strip())
+    if created_from is not None:
+        stmt = stmt.where(AuditLog.created_at >= created_from)
+    if created_to is not None:
+        stmt = stmt.where(AuditLog.created_at <= created_to)
+    rows = db.execute(stmt.order_by(AuditLog.created_at.desc(), AuditLog.log_id.desc()).limit(limit)).all()
     return [
         {
             "log_id": log.log_id,

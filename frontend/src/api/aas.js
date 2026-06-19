@@ -53,3 +53,8 @@ export function deleteUser(userId) {
   if (useMockApi) return mock.deleteUser(userId)
   return http.delete(`/aas/users/${userId}`).then((response) => response.data)
 }
+
+export function listAuditLogs(params) {
+  if (useMockApi) return Promise.resolve([])
+  return http.get('/aas/audit-logs', { params }).then((response) => response.data)
+}

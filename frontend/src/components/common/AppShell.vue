@@ -29,6 +29,7 @@ const navGroups = [
     label: '系統管理',
     items: [
       { label: '帳號管理', to: '/admin/users', roles: ['ADMIN'], icon: 'admin' },
+      { label: '稽核日誌', to: '/admin/audit-logs', roles: ['ADMIN'], icon: 'archive' },
       { label: '獎學金管理', to: '/admin/scholarships', roles: ['SPONSOR', 'ADMIN'], icon: 'manage' },
     ],
   },

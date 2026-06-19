@@ -20,4 +20,13 @@ export default [
       roles: ['ADMIN'],
     },
   },
+  {
+    path: '/admin/audit-logs',
+    name: 'aas-audit-logs',
+    component: () => import('@/views/aas/AuditLogView.vue'),
+    meta: {
+      title: '稽核日誌',
+      roles: ['ADMIN'],
+    },
+  },
 ]

@@ -270,3 +270,100 @@ def test_user_search_validates_role_and_status(client, db_session):
     assert role_response.json()["detail"] == "角色不存在"
     assert status_response.status_code == 400
     assert status_response.json()["detail"] == "狀態不存在"
+
+
+def test_login_and_logout_are_written_to_audit_log(client, db_session):
+    admin = create_user(db_session, account="admin", role="ADMIN")
+
+    failed_response = client.post(
+        "/api/aas/login",
+        json={"account": "admin", "password": "wrong-password"},
+    )
+    login_response = client.post(
+        "/api/aas/login",
+        json={"account": "admin", "password": "password123"},
+    )
+    token = login_response.json()["access_token"]
+    logout_response = client.post(
+        "/api/aas/logout",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert failed_response.status_code == 401
+    assert login_response.status_code == 200
+    assert logout_response.status_code == 200
+    actions = list(
+        db_session.scalars(
+            select(AuditLog.action)
+            .where(AuditLog.actor_id == admin.user_id)
+            .order_by(AuditLog.log_id)
+        )
+    )
+    assert actions == ["LOGIN_FAILED", "LOGIN_SUCCESS", "LOGOUT"]
+
+
+def test_admin_can_filter_audit_logs(client, db_session):
+    admin = create_user(db_session, account="admin", role="ADMIN")
+    student = create_user(db_session, account="student02")
+    db_session.add_all(
+        [
+            AuditLog(
+                actor_id=admin.user_id,
+                action="CREATE_USER",
+                target_type="user",
+                target_id=student.user_id,
+                detail="新增帳號",
+            ),
+            AuditLog(
+                actor_id=student.user_id,
+                action="LOGIN_SUCCESS",
+                target_type="user",
+                target_id=student.user_id,
+                detail="登入成功",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    response = client.get(
+        "/api/aas/audit-logs",
+        headers=auth_headers(admin),
+        params={
+            "actor_id": admin.user_id,
+            "action": "CREATE_USER",
+            "target_type": "user",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["actor_name"] == admin.name
+    assert payload[0]["action"] == "CREATE_USER"
+    assert payload[0]["target_id"] == student.user_id
+
+
+def test_non_admin_cannot_view_audit_logs(client, db_session):
+    student = create_user(db_session)
+
+    response = client.get(
+        "/api/aas/audit-logs",
+        headers=auth_headers(student),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "權限不足"
+
+
+@pytest.mark.parametrize("limit", [0, 501])
+def test_audit_log_limit_is_validated(client, db_session, limit):
+    admin = create_user(db_session, account="admin", role="ADMIN")
+
+    response = client.get(
+        "/api/aas/audit-logs",
+        headers=auth_headers(admin),
+        params={"limit": limit},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "查詢筆數需介於 1 到 500"

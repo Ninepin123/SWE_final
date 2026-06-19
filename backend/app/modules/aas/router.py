@@ -3,7 +3,9 @@
 範圍：登入/登出/查目前登入者；管理員的帳號 CRUD（新增/查詢/修改/刪除）；
       老師清單（給學生邀請推薦用）；稽核紀錄查詢。
 """
-from fastapi import APIRouter, Depends, status
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -25,13 +27,19 @@ router = APIRouter(prefix="/api/aas", tags=["AAS 帳號與權限管理"])
 
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
-    user = service.authenticate(db, body.account, body.password)
+    try:
+        user = service.authenticate(db, body.account, body.password)
+    except HTTPException as exc:
+        service.write_login_audit(db, body.account, success=False, detail=exc.detail)
+        raise
+    service.write_audit(db, user.user_id, "LOGIN_SUCCESS", "user", user.user_id, "登入成功")
     token = create_access_token(user.user_id, user.role)
     return TokenResponse(access_token=token, user=UserOut.model_validate(user))
 
 
 @router.post("/logout")
-def logout(current: User = Depends(get_current_user)):
+def logout(db: Session = Depends(get_db), current: User = Depends(get_current_user)):
+    service.write_audit(db, current.user_id, "LOGOUT", "user", current.user_id, "登出成功")
     return {"detail": "已登出"}
 
 
@@ -88,6 +96,23 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current: User = Dep
 
 
 @router.get("/audit-logs", response_model=list[AuditLogOut])
-def audit_logs(db: Session = Depends(get_db), _: User = Depends(require_roles("ADMIN"))):
+def audit_logs(
+    actor_id: int | None = None,
+    action: str | None = None,
+    target_type: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
+    limit: int = 200,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("ADMIN")),
+):
     """稽核紀錄（4.2.5，僅管理員）。"""
-    return service.list_audit_logs(db)
+    return service.list_audit_logs(
+        db,
+        actor_id=actor_id,
+        action=action,
+        target_type=target_type,
+        created_from=created_from,
+        created_to=created_to,
+        limit=limit,
+    )
