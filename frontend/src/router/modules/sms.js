@@ -17,7 +17,7 @@ export default [
     component: () => import('@/views/sms/ScholarshipManagementView.vue'),
     meta: {
       title: '獎學金管理',
-      roles: ['ADMIN'],
+      roles: ['SPONSOR', 'ADMIN'],
     },
   },
 ]

@@ -8,7 +8,7 @@ export default [
     component: () => import('@/views/trs/RecommendationRequestsView.vue'),
     meta: {
       title: '推薦信邀請',
-      roles: ['RECOMMENDER'],
+      roles: ['TEACHER'],
     },
   },
 ]

@@ -22,7 +22,7 @@ const router = createRouter({
       component: () => import('@/views/common/DashboardView.vue'),
       meta: {
         title: '系統總覽',
-        roles: ['STUDENT', 'REVIEWER', 'ADMIN', 'RECOMMENDER'],
+        roles: ['STUDENT', 'TEACHER', 'SPONSOR', 'REVIEWER', 'ADMIN'],
       },
     },
     {

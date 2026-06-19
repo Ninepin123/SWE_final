@@ -8,7 +8,7 @@ export default [
     component: () => import('@/views/ncs/NotificationsView.vue'),
     meta: {
       title: '通知中心',
-      roles: ['STUDENT', 'REVIEWER', 'ADMIN', 'RECOMMENDER'],
+      roles: ['STUDENT', 'TEACHER', 'SPONSOR', 'REVIEWER', 'ADMIN'],
     },
   },
 ]
