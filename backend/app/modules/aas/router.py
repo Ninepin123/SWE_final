@@ -11,9 +11,11 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.modules.aas import service
 from app.modules.aas.models import User
+from app.modules.aas.monitoring import build_metrics, metrics
 from app.modules.aas.schemas import (
     AuditLogOut,
     LoginRequest,
+    MonitoringMetricsOut,
     TeacherOut,
     TokenResponse,
     UserCreate,
@@ -31,14 +33,18 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         user = service.authenticate(db, body.account, body.password)
     except HTTPException as exc:
         service.write_login_audit(db, body.account, success=False, detail=exc.detail)
+        metrics.record_login_failure()  # AAS016：累計登入失敗供異常警示
         raise
     service.write_audit(db, user.user_id, "LOGIN_SUCCESS", "user", user.user_id, "登入成功")
-    token = create_access_token(user.user_id, user.role)
+    # AAS003：建立單一登入 session，將 jti 寫入 token；其他裝置先前的 token 立即失效。
+    jti = service.start_session(db, user)
+    token = create_access_token(user.user_id, user.role, jti=jti)
     return TokenResponse(access_token=token, user=UserOut.model_validate(user))
 
 
 @router.post("/logout")
 def logout(db: Session = Depends(get_db), current: User = Depends(get_current_user)):
+    service.end_session(db, current)
     service.write_audit(db, current.user_id, "LOGOUT", "user", current.user_id, "登出成功")
     return {"detail": "已登出"}
 
@@ -116,3 +122,9 @@ def audit_logs(
         created_to=created_to,
         limit=limit,
     )
+
+
+@router.get("/monitoring/metrics", response_model=MonitoringMetricsOut)
+def monitoring_metrics(db: Session = Depends(get_db), _: User = Depends(require_roles("ADMIN"))):
+    """系統維運監控（AAS015-016，僅管理員）：線上人數、負載、錯誤率與異常警示。"""
+    return build_metrics(db)
