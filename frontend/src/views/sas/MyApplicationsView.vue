@@ -1,12 +1,13 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import AuditTimeline from '@/components/common/AuditTimeline.vue'
 import BaseCard from '@/components/common/BaseCard.vue'
 import BaseModal from '@/components/common/BaseModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
-import { listMyApplications, sendRecommendationReminder } from '@/api/sas'
+import { listApplicationDocuments, listApplicationEvents, listMyApplications } from '@/api/sas'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
@@ -15,34 +16,63 @@ const toast = useToastStore()
 const loading = ref(true)
 const applications = ref([])
 const selected = ref(null)
+const selectedEvents = ref([])
+const selectedDocuments = ref([])
+const detailLoading = ref(false)
 
-const sortedApplications = computed(() =>
-  [...applications.value].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)),
-)
+const eventLabels = {
+  DRAFT_CREATED: '建立申請草稿',
+  DRAFT_UPDATED: '更新申請草稿',
+  DOCUMENT_CREATED: '新增文字文件',
+  DOCUMENT_UPDATED: '更新文字文件',
+  DOCUMENT_DELETED: '刪除文字文件',
+  APPLICATION_SUBMITTED: '正式送出申請',
+  SUPPLEMENT_REQUESTED: '審查人員要求補件',
+  SUPPLEMENT_SUBMITTED: '學生完成補件',
+  STATUS_CHANGED: '申請狀態更新',
+}
 
 function formatDate(value) {
-  if (!value) return '-'
+  if (!value) return '—'
   return new Intl.DateTimeFormat('zh-TW', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
   }).format(new Date(value))
 }
 
-async function reload() {
-  applications.value = await listMyApplications(auth.user.id)
-}
-
-async function remind(request) {
-  await sendRecommendationReminder(auth.user.id, request.id)
-  toast.success('已送出推薦信提醒')
-  await reload()
-  selected.value = applications.value.find((item) => item.id === selected.value.id)
+async function openDetail(application) {
+  selected.value = application
+  selectedEvents.value = []
+  selectedDocuments.value = []
+  detailLoading.value = true
+  try {
+    const [events, documents] = await Promise.all([
+      listApplicationEvents(application.application_id),
+      listApplicationDocuments(application.application_id),
+    ])
+    selectedEvents.value = events.map((event) => ({
+      ...event,
+      action: eventLabels[event.action] || event.action,
+    }))
+    selectedDocuments.value = documents
+  } catch (error) {
+    toast.error(error.response?.data?.detail || error.message || '申請詳情載入失敗')
+  } finally {
+    detailLoading.value = false
+  }
 }
 
 onMounted(async () => {
-  await reload()
-  loading.value = false
+  try {
+    applications.value = await listMyApplications(auth.user?.user_id ?? auth.user?.id)
+  } catch (error) {
+    toast.error(error.response?.data?.detail || error.message || '申請紀錄載入失敗')
+  } finally {
+    loading.value = false
+  }
 })
 </script>
 
@@ -51,8 +81,8 @@ onMounted(async () => {
 
   <EmptyState
     v-else-if="!applications.length"
-    title="尚未送出任何申請"
-    description="從可申請獎學金開始，完成多步驟表單後即可在這裡追蹤進度。"
+    title="尚未建立任何申請"
+    description="從可申請獎學金開始，可以先儲存草稿，再於期限內正式送出。"
     icon="application"
   />
 
@@ -63,31 +93,40 @@ onMounted(async () => {
           <thead>
             <tr>
               <th>獎學金</th>
-              <th>送出日期</th>
+              <th>建立時間</th>
+              <th>送出時間</th>
               <th>狀態</th>
-              <th>推薦信</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="application in sortedApplications" :key="application.id">
+            <tr v-for="application in applications" :key="application.application_id ?? application.id">
               <td>
-                <strong>{{ application.scholarship?.title }}</strong>
-                <span>{{ application.scholarship?.category }}</span>
+                <strong>{{ application.scholarship_name ?? application.scholarship?.title }}</strong>
               </td>
-              <td>{{ formatDate(application.submittedAt) }}</td>
+              <td>{{ formatDate(application.created_at ?? application.submittedAt) }}</td>
+              <td>{{ formatDate(application.submitted_at ?? application.submittedAt) }}</td>
               <td><StatusBadge :value="application.status" /></td>
               <td>
-                <StatusBadge
-                  v-if="application.recommendations.length"
-                  :value="application.recommendations[0].status"
-                />
-                <span v-else class="muted-text">不需要</span>
-              </td>
-              <td>
-                <button class="secondary-button" type="button" @click="selected = application">
-                  查看狀態
-                </button>
+                <div class="table-actions">
+                  <button class="secondary-button" type="button" @click="openDetail(application)">
+                    查看進度
+                  </button>
+                  <RouterLink
+                    v-if="application.status === 'DRAFT'"
+                    class="primary-button"
+                    :to="`/scholarships/${application.scholarship_id}/apply`"
+                  >
+                    繼續填寫
+                  </RouterLink>
+                  <RouterLink
+                    v-else-if="application.status === 'NEED_SUPPLEMENT'"
+                    class="primary-button"
+                    :to="`/applications/${application.application_id}/supplement`"
+                  >
+                    提交補件
+                  </RouterLink>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -98,11 +137,12 @@ onMounted(async () => {
 
   <BaseModal
     :show="!!selected"
-    :title="selected ? selected.scholarship?.title : ''"
+    :title="selected?.scholarship_name || '申請詳情'"
     width="920px"
     @close="selected = null"
   >
-    <div v-if="selected" class="detail-grid">
+    <LoadingSkeleton v-if="detailLoading" :rows="4" />
+    <div v-else-if="selected" class="detail-grid">
       <section>
         <h3>申請摘要</h3>
         <dl class="review-list">
@@ -111,43 +151,33 @@ onMounted(async () => {
             <dd><StatusBadge :value="selected.status" /></dd>
           </div>
           <div>
-            <dt>送出時間</dt>
-            <dd>{{ formatDate(selected.submittedAt) }}</dd>
+            <dt>建立時間</dt>
+            <dd>{{ formatDate(selected.created_at) }}</dd>
           </div>
           <div>
-            <dt>GPA</dt>
-            <dd>{{ selected.form.academics.gpa }}</dd>
+            <dt>正式送出</dt>
+            <dd>{{ formatDate(selected.submitted_at) }}</dd>
           </div>
           <div>
-            <dt>文件</dt>
-            <dd>{{ selected.form.documents.join('、') }}</dd>
+            <dt>申請理由</dt>
+            <dd>{{ selected.statement || '—' }}</dd>
           </div>
         </dl>
 
-        <h3>推薦信狀態</h3>
-        <div v-if="selected.recommendations.length" class="recommendation-list">
-          <div v-for="request in selected.recommendations" :key="request.id" class="mini-panel">
-            <div>
-              <strong>{{ request.recommenderName }}</strong>
-              <p>{{ request.recommenderTitle }} · {{ request.recommenderEmail }}</p>
-            </div>
-            <StatusBadge :value="request.status" />
-            <button
-              v-if="request.status !== 'SUBMITTED'"
-              class="secondary-button"
-              type="button"
-              @click="remind(request)"
-            >
-              提醒推薦人
-            </button>
-          </div>
+        <h3>文字文件</h3>
+        <div v-if="selectedDocuments.length" class="recommendation-list">
+          <article v-for="document in selectedDocuments" :key="document.document_id" class="mini-panel">
+            <strong>{{ document.title }}</strong>
+            <p>{{ document.content_text }}</p>
+          </article>
         </div>
-        <p v-else class="muted-text">此申請不需要推薦信。</p>
+        <p v-else class="muted-text">目前沒有文字文件。</p>
       </section>
 
       <section>
-        <h3>審核紀錄</h3>
-        <AuditTimeline :logs="selected.auditLogs" />
+        <h3>申請進度</h3>
+        <AuditTimeline v-if="selectedEvents.length" :logs="selectedEvents" />
+        <p v-else class="muted-text">目前沒有進度紀錄。</p>
       </section>
     </div>
   </BaseModal>

@@ -13,25 +13,43 @@ const saving = ref(false)
 const error = ref('')
 
 const form = reactive({
-  studentId: '',
+  account: '',
   name: '',
   department: '',
   grade: '',
-  email: '',
-  phone: '',
-  address: '',
   gpa: '',
-  credits: '',
-  familyStatus: '',
-  bankAccount: '',
-  emergencyContact: '',
+  identity_type: '',
+  email: '',
+  contact_phone: '',
+  address: '',
+  emergency_contact_name: '',
+  emergency_contact_phone: '',
 })
+
+function normalizeProfile(profile) {
+  return {
+    account: profile.account ?? profile.studentId ?? '',
+    name: profile.name ?? '',
+    department: profile.department ?? '',
+    grade: profile.grade ?? '',
+    gpa: profile.gpa ?? '',
+    identity_type: profile.identity_type ?? profile.identityType ?? '',
+    email: profile.email ?? '',
+    contact_phone: profile.contact_phone ?? profile.phone ?? '',
+    address: profile.address ?? '',
+    emergency_contact_name:
+      profile.emergency_contact_name ?? profile.emergencyContactName ?? profile.emergencyContact ?? '',
+    emergency_contact_phone: profile.emergency_contact_phone ?? profile.emergencyContactPhone ?? '',
+  }
+}
 
 function validate() {
   error.value = ''
-  if (!form.email.includes('@')) error.value = 'Email 格式不正確。'
-  if (!form.phone) error.value = '請填寫聯絡電話。'
-  if (Number(form.gpa) < 0 || Number(form.gpa) > 4.3) error.value = 'GPA 必須介於 0 到 4.3。'
+  if (form.email && !form.email.includes('@')) {
+    error.value = 'Email 格式不正確。'
+  } else if (!form.contact_phone.trim()) {
+    error.value = '請填寫聯絡電話。'
+  }
   return !error.value
 }
 
@@ -39,27 +57,35 @@ async function save() {
   if (!validate()) return
   saving.value = true
   try {
-    const updated = await updateProfile(auth.user.id, {
-      grade: form.grade,
-      email: form.email,
-      phone: form.phone,
-      address: form.address,
-      gpa: Number(form.gpa),
-      credits: Number(form.credits),
-      familyStatus: form.familyStatus,
-      bankAccount: form.bankAccount,
-      emergencyContact: form.emergencyContact,
+    const updated = await updateProfile(auth.user?.user_id ?? auth.user?.id, {
+      email: form.email.trim() || null,
+      contact_phone: form.contact_phone.trim() || null,
+      address: form.address.trim() || null,
+      emergency_contact_name: form.emergency_contact_name.trim() || null,
+      emergency_contact_phone: form.emergency_contact_phone.trim() || null,
     })
-    Object.assign(form, updated)
+    Object.assign(form, normalizeProfile(updated))
     toast.success('個人資料已更新')
+  } catch (saveError) {
+    error.value =
+      saveError.response?.data?.detail?.[0]?.msg ||
+      saveError.response?.data?.detail ||
+      saveError.message ||
+      '個人資料更新失敗'
   } finally {
     saving.value = false
   }
 }
 
 onMounted(async () => {
-  Object.assign(form, await getProfile(auth.user.id))
-  loading.value = false
+  try {
+    const profile = await getProfile(auth.user?.user_id ?? auth.user?.id)
+    Object.assign(form, normalizeProfile(profile))
+  } catch (loadError) {
+    error.value = loadError.response?.data?.detail || loadError.message || '個人資料載入失敗'
+  } finally {
+    loading.value = false
+  }
 })
 </script>
 
@@ -69,17 +95,17 @@ onMounted(async () => {
   <div v-else class="page-grid">
     <BaseCard title="我的個人資料" eyebrow="Profile">
       <p class="muted-text">
-        學號、姓名與科系為核心資料，需由管理單位更正；其餘資料會帶入獎學金申請表。
+        學號、姓名、科系、年級、GPA 與身份類別為核心資料，需由管理單位更正。
       </p>
       <p v-if="error" class="form-error">{{ error }}</p>
 
       <div class="field-group">
         <p class="field-group__title">核心資料</p>
-        <p class="field-group__hint">以下欄位由管理單位維護，如需更正請聯繫系統管理員。</p>
+        <p class="field-group__hint">以下欄位僅供查看，學生無法自行修改。</p>
         <div class="form-grid">
           <label>
             <span>學號</span>
-            <input v-model="form.studentId" disabled type="text" />
+            <input v-model="form.account" disabled type="text" />
           </label>
           <label>
             <span>姓名</span>
@@ -91,7 +117,15 @@ onMounted(async () => {
           </label>
           <label>
             <span>年級</span>
-            <input v-model="form.grade" type="text" />
+            <input v-model="form.grade" disabled type="text" />
+          </label>
+          <label>
+            <span>GPA</span>
+            <input v-model="form.gpa" disabled type="text" />
+          </label>
+          <label>
+            <span>身份類別</span>
+            <input v-model="form.identity_type" disabled type="text" />
           </label>
         </div>
       </div>
@@ -105,7 +139,7 @@ onMounted(async () => {
           </label>
           <label>
             <span>聯絡電話</span>
-            <input v-model="form.phone" type="tel" />
+            <input v-model="form.contact_phone" type="tel" />
           </label>
           <label class="form-grid__wide">
             <span>通訊地址</span>
@@ -115,33 +149,15 @@ onMounted(async () => {
       </div>
 
       <div class="field-group">
-        <p class="field-group__title">學業與經濟</p>
+        <p class="field-group__title">緊急聯絡資料</p>
         <div class="form-grid">
-          <label>
-            <span>GPA</span>
-            <input v-model="form.gpa" max="4.3" min="0" step="0.01" type="number" />
-          </label>
-          <label>
-            <span>已修學分</span>
-            <input v-model="form.credits" min="0" type="number" />
-          </label>
-          <label class="form-grid__wide">
-            <span>家庭與經濟狀況</span>
-            <textarea v-model="form.familyStatus" rows="4" />
-          </label>
-        </div>
-      </div>
-
-      <div class="field-group">
-        <p class="field-group__title">撥款與緊急聯絡</p>
-        <div class="form-grid">
-          <label>
-            <span>撥款帳戶</span>
-            <input v-model="form.bankAccount" type="text" />
-          </label>
           <label>
             <span>緊急聯絡人</span>
-            <input v-model="form.emergencyContact" type="text" />
+            <input v-model="form.emergency_contact_name" type="text" />
+          </label>
+          <label>
+            <span>緊急聯絡電話</span>
+            <input v-model="form.emergency_contact_phone" type="tel" />
           </label>
         </div>
       </div>
