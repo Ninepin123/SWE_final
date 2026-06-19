@@ -1,14 +1,14 @@
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
 from app.modules.aas.models import AuditLog, Unit, User
 from app.modules.aas.router import router
-from app.modules.aas.security import create_access_token, hash_password
+from app.modules.aas.security import create_access_token, hash_password, verify_password
 
 
 @pytest.fixture()
@@ -138,3 +138,135 @@ def test_logout_requires_valid_token(client, db_session):
 
     assert response.status_code == 200
     assert response.json() == {"detail": "已登出"}
+
+
+def auth_headers(user):
+    token = create_access_token(user.user_id, user.role)
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_admin_can_create_update_search_and_delete_user(client, db_session):
+    admin = create_user(db_session, account="admin", role="ADMIN")
+
+    create_response = client.post(
+        "/api/aas/users",
+        headers=auth_headers(admin),
+        json={
+            "account": "teacher01",
+            "password": "initial-pass",
+            "name": "王老師",
+            "role": "TEACHER",
+            "email": "teacher01@nuk.edu.tw",
+            "department": "資訊工程學系",
+        },
+    )
+
+    assert create_response.status_code == 201
+    created = create_response.json()
+    user_id = created["user_id"]
+    stored = db_session.get(User, user_id)
+    assert stored.password != "initial-pass"
+    assert verify_password("initial-pass", stored.password)
+
+    search_response = client.get(
+        "/api/aas/users",
+        headers=auth_headers(admin),
+        params={"keyword": "王老師", "role": "TEACHER", "account_status": "ACTIVE"},
+    )
+    assert search_response.status_code == 200
+    assert [item["user_id"] for item in search_response.json()] == [user_id]
+
+    update_response = client.put(
+        f"/api/aas/users/{user_id}",
+        headers=auth_headers(admin),
+        json={
+            "name": "王教授",
+            "status": "DISABLED",
+            "password": "updated-pass",
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["name"] == "王教授"
+    assert update_response.json()["status"] == "DISABLED"
+    db_session.refresh(stored)
+    assert verify_password("updated-pass", stored.password)
+
+    delete_response = client.delete(
+        f"/api/aas/users/{user_id}",
+        headers=auth_headers(admin),
+    )
+    assert delete_response.status_code == 200
+    assert db_session.get(User, user_id) is None
+
+    actions = list(db_session.scalars(select(AuditLog.action).order_by(AuditLog.log_id)))
+    assert actions == ["CREATE_USER", "UPDATE_USER", "DELETE_USER"]
+
+
+def test_non_admin_cannot_manage_users(client, db_session):
+    student = create_user(db_session)
+
+    response = client.get("/api/aas/users", headers=auth_headers(student))
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "權限不足"
+
+
+def test_duplicate_account_is_rejected(client, db_session):
+    admin = create_user(db_session, account="admin", role="ADMIN")
+    create_user(db_session, account="duplicate")
+
+    response = client.post(
+        "/api/aas/users",
+        headers=auth_headers(admin),
+        json={
+            "account": "duplicate",
+            "password": "password123",
+            "name": "重複帳號",
+            "role": "STUDENT",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "帳號已存在"
+
+
+def test_admin_cannot_disable_or_delete_self(client, db_session):
+    admin = create_user(db_session, account="admin", role="ADMIN")
+    headers = auth_headers(admin)
+
+    disable_response = client.put(
+        f"/api/aas/users/{admin.user_id}",
+        headers=headers,
+        json={"status": "DISABLED"},
+    )
+    delete_response = client.delete(
+        f"/api/aas/users/{admin.user_id}",
+        headers=headers,
+    )
+
+    assert disable_response.status_code == 400
+    assert disable_response.json()["detail"] == "不能停用目前登入的管理員帳號"
+    assert delete_response.status_code == 400
+    assert delete_response.json()["detail"] == "不能刪除目前登入的管理員帳號"
+    db_session.refresh(admin)
+    assert admin.status == "ACTIVE"
+
+
+def test_user_search_validates_role_and_status(client, db_session):
+    admin = create_user(db_session, account="admin", role="ADMIN")
+
+    role_response = client.get(
+        "/api/aas/users",
+        headers=auth_headers(admin),
+        params={"role": "UNKNOWN"},
+    )
+    status_response = client.get(
+        "/api/aas/users",
+        headers=auth_headers(admin),
+        params={"account_status": "UNKNOWN"},
+    )
+
+    assert role_response.status_code == 400
+    assert role_response.json()["detail"] == "角色不存在"
+    assert status_response.status_code == 400
+    assert status_response.json()["detail"] == "狀態不存在"

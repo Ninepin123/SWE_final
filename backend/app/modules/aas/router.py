@@ -47,8 +47,21 @@ def list_teachers(db: Session = Depends(get_db), _: User = Depends(get_current_u
 
 
 @router.get("/users", response_model=list[UserOut])
-def list_users(db: Session = Depends(get_db), _: User = Depends(require_roles("ADMIN"))):
-    return service.list_users(db)
+def list_users(
+    keyword: str | None = None,
+    role: str | None = None,
+    unit_id: int | None = None,
+    account_status: str | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("ADMIN")),
+):
+    return service.list_users(
+        db,
+        keyword=keyword,
+        role=role,
+        unit_id=unit_id,
+        account_status=account_status,
+    )
 
 
 @router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -62,14 +75,14 @@ def create_user(body: UserCreate, db: Session = Depends(get_db), current: User =
 def update_user(
     user_id: int, body: UserUpdate, db: Session = Depends(get_db), current: User = Depends(require_roles("ADMIN"))
 ):
-    user = service.update_user(db, user_id, body)
+    user = service.update_user(db, user_id, body, current_user_id=current.user_id)
     service.write_audit(db, current.user_id, "UPDATE_USER", "user", user_id, f"修改帳號 {user.account}")
     return user
 
 
 @router.delete("/users/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db), current: User = Depends(require_roles("ADMIN"))):
-    service.delete_user(db, user_id)
+    service.delete_user(db, user_id, current_user_id=current.user_id)
     service.write_audit(db, current.user_id, "DELETE_USER", "user", user_id, f"刪除帳號 #{user_id}")
     return {"detail": "已刪除帳號"}
 

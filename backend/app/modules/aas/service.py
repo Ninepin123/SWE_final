@@ -1,6 +1,6 @@
 """AAS — 商業邏輯層（登入驗證、帳號 CRUD、稽核紀錄）。"""
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -21,8 +21,35 @@ def authenticate(db: Session, account: str, password: str) -> User:
     return user
 
 
-def list_users(db: Session) -> list[User]:
-    return list(db.scalars(select(User).order_by(User.user_id)))
+def list_users(
+    db: Session,
+    keyword: str | None = None,
+    role: str | None = None,
+    unit_id: int | None = None,
+    account_status: str | None = None,
+) -> list[User]:
+    stmt = select(User)
+    if keyword and keyword.strip():
+        pattern = f"%{keyword.strip()}%"
+        stmt = stmt.where(
+            or_(
+                User.account.ilike(pattern),
+                User.name.ilike(pattern),
+                User.email.ilike(pattern),
+                User.department.ilike(pattern),
+            )
+        )
+    if role:
+        if role not in VALID_ROLES:
+            raise HTTPException(status_code=400, detail="角色不存在")
+        stmt = stmt.where(User.role == role)
+    if unit_id is not None:
+        stmt = stmt.where(User.unit_id == unit_id)
+    if account_status:
+        if account_status not in VALID_STATUS:
+            raise HTTPException(status_code=400, detail="狀態不存在")
+        stmt = stmt.where(User.status == account_status)
+    return list(db.scalars(stmt.order_by(User.user_id)))
 
 
 def list_teachers(db: Session) -> list[User]:
@@ -34,6 +61,8 @@ def create_user(db: Session, data: UserCreate) -> User:
         raise HTTPException(status_code=400, detail="角色不存在")
     if db.scalar(select(User).where(User.account == data.account)):
         raise HTTPException(status_code=409, detail="帳號已存在")
+    if not data.password.strip():
+        raise HTTPException(status_code=400, detail="密碼不可為空")
     user = User(
         account=data.account,
         password=hash_password(data.password),
@@ -51,7 +80,7 @@ def create_user(db: Session, data: UserCreate) -> User:
     return user
 
 
-def update_user(db: Session, user_id: int, data: UserUpdate) -> User:
+def update_user(db: Session, user_id: int, data: UserUpdate, current_user_id: int | None = None) -> User:
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="找不到帳號")
@@ -60,6 +89,8 @@ def update_user(db: Session, user_id: int, data: UserUpdate) -> User:
         raise HTTPException(status_code=400, detail="角色不存在")
     if "status" in payload and payload["status"] not in VALID_STATUS:
         raise HTTPException(status_code=400, detail="狀態不存在")
+    if current_user_id == user_id and payload.get("status") == "DISABLED":
+        raise HTTPException(status_code=400, detail="不能停用目前登入的管理員帳號")
     if "password" in payload:
         pw = payload.pop("password")
         if pw:
@@ -71,7 +102,9 @@ def update_user(db: Session, user_id: int, data: UserUpdate) -> User:
     return user
 
 
-def delete_user(db: Session, user_id: int) -> None:
+def delete_user(db: Session, user_id: int, current_user_id: int | None = None) -> None:
+    if current_user_id == user_id:
+        raise HTTPException(status_code=400, detail="不能刪除目前登入的管理員帳號")
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="找不到帳號")

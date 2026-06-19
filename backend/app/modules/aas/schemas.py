@@ -1,7 +1,7 @@
 """AAS — Pydantic schema。介面契約同步在 docs/API.md。"""
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LoginRequest(BaseModel):
@@ -29,9 +29,9 @@ class TokenResponse(BaseModel):
 
 
 class UserCreate(BaseModel):
-    account: str
-    password: str
-    name: str
+    account: str = Field(min_length=1, max_length=50)
+    password: str = Field(min_length=8, max_length=128)
+    name: str = Field(min_length=1, max_length=100)
     role: str
     email: str | None = None
     unit_id: int | None = None
@@ -48,7 +48,7 @@ class UserUpdate(BaseModel):
     department: str | None = None
     gpa: float | None = None
     status: str | None = None
-    password: str | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
 
 
 class TeacherOut(BaseModel):
