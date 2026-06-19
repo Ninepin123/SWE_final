@@ -43,6 +43,9 @@ PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 -- 學生個人資料（6.2.1：學號等核心欄位不可由學生修改，這裡僅放可編輯欄位；身分資料讀 users）
 CREATE TABLE IF NOT EXISTS student_profiles (
     user_id                 INT PRIMARY KEY,
+    grade                   VARCHAR(20),
+    identity_type           VARCHAR(50),
+    contact_email           VARCHAR(100),
     contact_phone           VARCHAR(30),
     address                 VARCHAR(255),
     emergency_contact_name  VARCHAR(100),
@@ -50,3 +53,13 @@ CREATE TABLE IF NOT EXISTS student_profiles (
     updated_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_profile_user FOREIGN KEY (user_id) REFERENCES users(user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='student_profiles' AND column_name='grade');
+SET @s := IF(@c=0, 'ALTER TABLE student_profiles ADD COLUMN grade VARCHAR(20) NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='student_profiles' AND column_name='identity_type');
+SET @s := IF(@c=0, 'ALTER TABLE student_profiles ADD COLUMN identity_type VARCHAR(50) NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='student_profiles' AND column_name='contact_email');
+SET @s := IF(@c=0, 'ALTER TABLE student_profiles ADD COLUMN contact_email VARCHAR(100) NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;

@@ -111,8 +111,10 @@
 ## SAS（變更/新增）
 - 申請表（`POST /api/sas/applications`）新增欄位：`statement(申請理由), contact_phone, address, household_status, academic_note`。
 - 申請成功會透過 NCS 發送通知給學生。
-- **GET /api/sas/profile**（僅 STUDENT）：`ProfileOut`（身分資料唯讀 + 可編輯欄位）。
-- **PUT /api/sas/profile**（僅 STUDENT）：更新 `contact_phone, address, emergency_contact_name, emergency_contact_phone`（學號/姓名/GPA 不可改）。
+- **GET /api/sas/profile**（僅 STUDENT）：`ProfileOut = { user_id, account, name, department, grade, gpa, identity_type, email, contact_phone, address, emergency_contact_name, emergency_contact_phone }`。
+  - `account/name/department/grade/gpa/identity_type` 為核心身分資料，只讀。
+  - `email/contact_phone/address/emergency_contact_name/emergency_contact_phone` 為學生可維護的聯絡資料。
+- **PUT /api/sas/profile**（僅 STUDENT）：只接受 `email, contact_phone, address, emergency_contact_name, emergency_contact_phone`。即使 request 夾帶學號、姓名、科系、年級、GPA 或身份類別，也不會修改核心資料。
 
 ## RAS（變更）
 - 兩支端點改為 **僅 REVIEWER**（移除 ADMIN）。

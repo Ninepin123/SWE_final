@@ -1,7 +1,7 @@
 """SAS — Pydantic schema。介面契約同步在 docs/API.md。"""
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 class ApplicationCreate(BaseModel):
@@ -31,10 +31,12 @@ class ProfileOut(BaseModel):
     user_id: int
     account: str
     name: str
-    email: str | None = None
     department: str | None = None
+    grade: str | None = None
     gpa: float | None = None
+    identity_type: str | None = None
     # 可編輯欄位（來自 student_profiles）
+    email: str | None = None
     contact_phone: str | None = None
     address: str | None = None
     emergency_contact_name: str | None = None
@@ -42,7 +44,17 @@ class ProfileOut(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
-    contact_phone: str | None = None
-    address: str | None = None
-    emergency_contact_name: str | None = None
-    emergency_contact_phone: str | None = None
+    email: str | None = Field(default=None, max_length=100)
+    contact_phone: str | None = Field(default=None, max_length=30)
+    address: str | None = Field(default=None, max_length=255)
+    emergency_contact_name: str | None = Field(default=None, max_length=100)
+    emergency_contact_phone: str | None = Field(default=None, max_length=30)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return value
+        if "@" not in value or value.startswith("@") or value.endswith("@"):
+            raise ValueError("Email 格式不正確")
+        return value

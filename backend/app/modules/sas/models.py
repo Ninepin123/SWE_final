@@ -29,6 +29,9 @@ class StudentProfile(Base):
     __tablename__ = "student_profiles"
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"), primary_key=True)
+    grade: Mapped[str | None] = mapped_column(String(20))
+    identity_type: Mapped[str | None] = mapped_column(String(50))
+    contact_email: Mapped[str | None] = mapped_column(String(100))
     contact_phone: Mapped[str | None] = mapped_column(String(30))
     address: Mapped[str | None] = mapped_column(String(255))
     emergency_contact_name: Mapped[str | None] = mapped_column(String(100))

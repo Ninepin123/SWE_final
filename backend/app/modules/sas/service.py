@@ -102,9 +102,11 @@ def get_profile(db: Session, student: User) -> dict:
         "user_id": student.user_id,
         "account": student.account,
         "name": student.name,
-        "email": student.email,
         "department": student.department,
+        "grade": profile.grade if profile else None,
         "gpa": float(student.gpa) if student.gpa is not None else None,
+        "identity_type": profile.identity_type if profile else None,
+        "email": (profile.contact_email if profile and profile.contact_email is not None else student.email),
         "contact_phone": profile.contact_phone if profile else None,
         "address": profile.address if profile else None,
         "emergency_contact_name": profile.emergency_contact_name if profile else None,
@@ -117,7 +119,10 @@ def update_profile(db: Session, student: User, data: ProfileUpdate) -> dict:
     if profile is None:
         profile = StudentProfile(user_id=student.user_id)
         db.add(profile)
-    for key, value in data.model_dump(exclude_unset=True).items():
+    payload = data.model_dump(exclude_unset=True)
+    if "email" in payload:
+        profile.contact_email = payload.pop("email")
+    for key, value in payload.items():
         setattr(profile, key, value)
     db.commit()
     return get_profile(db, student)
