@@ -4,10 +4,11 @@ This file intentionally creates a merge conflict to test Claude's PR review.
 
 ## Greeting
 
-Hello from the **feature branch** (`test/merge-conflict-demo`).
+Hello from both **feature branch** (`test/merge-conflict-demo`) and **main** (the base branch).
 
 ## Status
 
-- Source: feature branch
-- Value: 100
-- Note: this line was written on the feature side and conflicts with main.
+- Source: merged (feature branch + main)
+- Value (feature): 100
+- Value (main): 999
+- Note: conflict resolved by Claude — both sides' content has been combined.
