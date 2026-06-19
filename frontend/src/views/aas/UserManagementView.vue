@@ -7,9 +7,9 @@ import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import Icon from '@/components/common/Icon.vue'
 import { createUser, deleteUser, listUsers, updateUser } from '@/api/aas'
+import { ROLE_LABELS } from '@/api/aas'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
-import { ROLE_LABELS } from '@/services/mockBackend'
 
 const auth = useAuthStore()
 const toast = useToastStore()

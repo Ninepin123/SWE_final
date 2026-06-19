@@ -68,13 +68,12 @@ async function login() {
       }
       await auth.loginAs(roleByAccount)
     } else {
-      // TODO(AAS): 接上正式登入 API（POST /api/aas/login）
-      throw new Error('登入 API 尚未啟用')
+      await auth.login(form.account.trim(), form.password)
     }
     toast.success(`歡迎，${auth.user?.name}`)
     router.push(route.query.redirect || '/dashboard')
   } catch (loginError) {
-    error.value = loginError.message || '登入失敗'
+    error.value = loginError.response?.data?.detail || loginError.message || '登入失敗'
   } finally {
     loading.value = false
   }
