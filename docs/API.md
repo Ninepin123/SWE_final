@@ -66,14 +66,26 @@
 - 目前 SMS 尚未提供必要文件資料結構，因此 `required_documents` 暫時回傳空陣列。
 
 ### POST /api/sas/applications  （僅 STUDENT）
-- 檢查：獎學金開放中、未截止、GPA 達門檻、未重複申請。
-- Request：`{ "scholarship_id": 1, "statement": "..." }`
-- Response：`ApplicationOut = { application_id, scholarship_id, scholarship_name, status, statement, created_at }`（201）
-- `status` 初始為 `UNDER_REVIEW`。
+- 建立申請草稿；檢查獎學金開放中、未截止、資格符合且沒有重複草稿或申請。
+- Request：`{ scholarship_id, statement?, contact_phone?, address?, household_status?, academic_note? }`
+- Response：`ApplicationOut`（201），初始 `status=DRAFT`。
+
+### PUT /api/sas/applications/{id}  （僅申請學生）
+- 更新自己的草稿。正式送出、已截止或關閉後不可修改。
+- Request：`{ statement?, contact_phone?, address?, household_status?, academic_note? }`
+
+### POST /api/sas/applications/{id}/submit  （僅申請學生）
+- 正式送出草稿；重新檢查資格、期限及申請表必填欄位。
+- 成功後狀態由 `DRAFT` 改為 `UNDER_REVIEW`，寫入 `submitted_at` 並發送通知。
+- 正式送出後不可再次修改或重複送出。
+
+### GET /api/sas/applications/{id}  （僅申請學生）
+- 查詢自己的單筆申請或草稿。
 
 ### GET /api/sas/applications/me  （僅 STUDENT）
 - Response：`ApplicationOut[]`
-- `status`：`UNDER_REVIEW`(審核中) / `NEED_SUPPLEMENT`(需補件) / `APPROVED`(已通過) / `REJECTED`(未通過)
+- `status`：`DRAFT`(草稿) / `UNDER_REVIEW`(審核中) / `NEED_SUPPLEMENT`(需補件) / `APPROVED`(已通過) / `REJECTED`(未通過)
+- `ApplicationOut` 包含 `created_at`, `updated_at`, `submitted_at`, `can_edit`。
 
 ---
 

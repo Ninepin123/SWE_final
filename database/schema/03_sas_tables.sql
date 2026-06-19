@@ -10,8 +10,8 @@ CREATE TABLE IF NOT EXISTS applications (
     application_id   INT AUTO_INCREMENT PRIMARY KEY,
     student_id       INT NOT NULL,
     scholarship_id   INT NOT NULL,
-    status           ENUM('UNDER_REVIEW','NEED_SUPPLEMENT','APPROVED','REJECTED')
-                        NOT NULL DEFAULT 'UNDER_REVIEW',
+    status           ENUM('DRAFT','UNDER_REVIEW','NEED_SUPPLEMENT','APPROVED','REJECTED')
+                        NOT NULL DEFAULT 'DRAFT',
     -- 申請表欄位（NUKSAMS012）
     statement        TEXT,            -- 申請理由 / 自述
     contact_phone    VARCHAR(30),     -- 聯絡電話
@@ -20,10 +20,18 @@ CREATE TABLE IF NOT EXISTS applications (
     academic_note    TEXT,            -- 在學成績 / 排名說明
     created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    submitted_at     DATETIME NULL,
     CONSTRAINT uq_student_scholarship UNIQUE (student_id, scholarship_id),
     CONSTRAINT fk_app_student     FOREIGN KEY (student_id)     REFERENCES users(user_id),
     CONSTRAINT fk_app_scholarship FOREIGN KEY (scholarship_id) REFERENCES scholarships(scholarship_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='applications' AND column_name='submitted_at');
+SET @s := IF(@c=0, 'ALTER TABLE applications ADD COLUMN submitted_at DATETIME NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+ALTER TABLE applications MODIFY COLUMN status
+    ENUM('DRAFT','UNDER_REVIEW','NEED_SUPPLEMENT','APPROVED','REJECTED')
+    NOT NULL DEFAULT 'DRAFT';
 
 -- 相容舊版(v1)資料表：若缺少新欄位則補上（MySQL 8 沒有 ADD COLUMN IF NOT EXISTS，
 -- 改用 information_schema 判斷 + PREPARE，全部為頂層語句，可被資料庫載入腳本逐句執行）。

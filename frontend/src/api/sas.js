@@ -45,21 +45,26 @@ export function listAvailableScholarships(studentId) {
 }
 
 export function listMyApplications(studentId) {
-  return withApiFallback(() => http.get('/sas/applications'), () =>
-    mock.listApplicationsByStudent(studentId),
-  )
+  if (useMockApi) return mock.listApplicationsByStudent(studentId)
+  return http.get('/sas/applications/me').then((response) => response.data)
 }
 
 export function getApplication(applicationId) {
-  return withApiFallback(() => http.get(`/sas/applications/${applicationId}`), () =>
-    mock.getApplication(applicationId),
-  )
+  if (useMockApi) return mock.getApplication(applicationId)
+  return http.get(`/sas/applications/${applicationId}`).then((response) => response.data)
 }
 
 export function createApplication(studentId, data) {
-  return withApiFallback(() => http.post('/sas/applications', data), () =>
-    mock.createApplication(studentId, data),
-  )
+  if (useMockApi) return mock.createApplication(studentId, data)
+  return http.post('/sas/applications', data).then((response) => response.data)
+}
+
+export function updateApplication(applicationId, data) {
+  return http.put(`/sas/applications/${applicationId}`, data).then((response) => response.data)
+}
+
+export function submitApplication(applicationId) {
+  return http.post(`/sas/applications/${applicationId}/submit`).then((response) => response.data)
 }
 
 export function sendRecommendationReminder(studentId, requestId) {

@@ -13,6 +13,14 @@ class ApplicationCreate(BaseModel):
     academic_note: str | None = None
 
 
+class ApplicationUpdate(BaseModel):
+    statement: str | None = None
+    contact_phone: str | None = None
+    address: str | None = None
+    household_status: str | None = None
+    academic_note: str | None = None
+
+
 class ApplicationOut(BaseModel):
     application_id: int
     scholarship_id: int
@@ -24,6 +32,9 @@ class ApplicationOut(BaseModel):
     household_status: str | None = None
     academic_note: str | None = None
     created_at: datetime
+    updated_at: datetime
+    submitted_at: datetime | None = None
+    can_edit: bool
 
 
 class ProfileOut(BaseModel):

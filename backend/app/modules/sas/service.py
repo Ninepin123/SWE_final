@@ -14,10 +14,10 @@ from sqlalchemy.orm import Session
 from app.modules.aas.models import Unit, User
 from app.modules.ncs import service as ncs_service
 from app.modules.sas.models import Application, StudentProfile
-from app.modules.sas.schemas import ApplicationCreate, ProfileUpdate
+from app.modules.sas.schemas import ApplicationCreate, ApplicationUpdate, ProfileUpdate
 from app.modules.sms.models import Scholarship
 
-VALID_STATUSES = {"UNDER_REVIEW", "NEED_SUPPLEMENT", "APPROVED", "REJECTED"}
+VALID_STATUSES = {"DRAFT", "UNDER_REVIEW", "NEED_SUPPLEMENT", "APPROVED", "REJECTED"}
 VALID_CATEGORIES = {"SCHOOL", "GOVERNMENT", "PRIVATE", "LOW_INCOME", "MERIT", "OTHER"}
 
 
@@ -40,6 +40,9 @@ def _to_out(db: Session, app: Application) -> dict:
         "household_status": app.household_status,
         "academic_note": app.academic_note,
         "created_at": app.created_at,
+        "updated_at": app.updated_at,
+        "submitted_at": app.submitted_at,
+        "can_edit": app.status == "DRAFT" and not _is_deadline_passed(sch),
     }
 
 
@@ -116,7 +119,8 @@ def list_scholarships_for_student(
 
         application_count = db.scalar(
             select(func.count(Application.application_id)).where(
-                Application.scholarship_id == scholarship.scholarship_id
+                Application.scholarship_id == scholarship.scholarship_id,
+                Application.status != "DRAFT",
             )
         ) or 0
         remaining_quota = max(scholarship.quota - application_count, 0)
@@ -161,28 +165,67 @@ def list_scholarships_for_student(
     return result
 
 
-def apply(db: Session, student: User, data: ApplicationCreate) -> dict:
-    sch = db.get(Scholarship, data.scholarship_id)
+def _is_deadline_passed(scholarship: Scholarship | None) -> bool:
+    if scholarship is None:
+        return True
+    deadline = _naive(scholarship.deadline)
+    return deadline is not None and deadline < datetime.now()
+
+
+def _get_eligible_scholarship(db: Session, student: User, scholarship_id: int) -> Scholarship:
+    sch = db.get(Scholarship, scholarship_id)
     if sch is None:
         raise HTTPException(status_code=404, detail="找不到獎學金")
-    if sch.status != "OPEN":
-        raise HTTPException(status_code=400, detail="此獎學金已關閉申請")
-    dl = _naive(sch.deadline)
-    if dl is not None and dl < datetime.now():
-        raise HTTPException(status_code=400, detail="已超過申請截止日期")
-    if sch.min_gpa is not None and student.gpa is not None and float(student.gpa) < float(sch.min_gpa):
-        raise HTTPException(status_code=400, detail=f"GPA 未達申請門檻（需 {sch.min_gpa}）")
+    application_count = db.scalar(
+        select(func.count(Application.application_id)).where(
+            Application.scholarship_id == scholarship_id,
+            Application.status != "DRAFT",
+        )
+    ) or 0
+    reasons = _eligibility_reasons(
+        sch,
+        student,
+        max(sch.quota - application_count, 0),
+        False,
+        datetime.now(),
+    )
+    if reasons:
+        raise HTTPException(status_code=400, detail="；".join(reasons))
+    return sch
+
+
+def _get_owned_application(db: Session, student: User, application_id: int) -> Application:
+    app = db.get(Application, application_id)
+    if app is None or app.student_id != student.user_id:
+        raise HTTPException(status_code=404, detail="找不到申請案")
+    return app
+
+
+def _ensure_editable(db: Session, app: Application) -> Scholarship:
+    if app.status != "DRAFT":
+        raise HTTPException(status_code=409, detail="申請已正式送出，無法再修改")
+    scholarship = db.get(Scholarship, app.scholarship_id)
+    if _is_deadline_passed(scholarship):
+        raise HTTPException(status_code=409, detail="已超過申請截止時間，草稿已鎖定")
+    if scholarship is None or scholarship.status != "OPEN":
+        raise HTTPException(status_code=409, detail="獎學金目前未開放申請")
+    return scholarship
+
+
+def create_draft(db: Session, student: User, data: ApplicationCreate) -> dict:
+    sch = _get_eligible_scholarship(db, student, data.scholarship_id)
     dup = db.scalar(
         select(Application).where(
-            Application.student_id == student.user_id, Application.scholarship_id == data.scholarship_id
+            Application.student_id == student.user_id,
+            Application.scholarship_id == data.scholarship_id,
         )
     )
     if dup is not None:
-        raise HTTPException(status_code=409, detail="你已申請過此獎學金")
+        raise HTTPException(status_code=409, detail="此獎學金已有申請或草稿")
     app = Application(
         student_id=student.user_id,
-        scholarship_id=data.scholarship_id,
-        status="UNDER_REVIEW",
+        scholarship_id=sch.scholarship_id,
+        status="DRAFT",
         statement=data.statement,
         contact_phone=data.contact_phone,
         address=data.address,
@@ -192,10 +235,58 @@ def apply(db: Session, student: User, data: ApplicationCreate) -> dict:
     db.add(app)
     db.commit()
     db.refresh(app)
+    return _to_out(db, app)
+
+
+def get_my_application(db: Session, student: User, application_id: int) -> dict:
+    return _to_out(db, _get_owned_application(db, student, application_id))
+
+
+def update_draft(db: Session, student: User, application_id: int, data: ApplicationUpdate) -> dict:
+    app = _get_owned_application(db, student, application_id)
+    _ensure_editable(db, app)
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(app, key, value)
+    db.commit()
+    db.refresh(app)
+    return _to_out(db, app)
+
+
+def submit_application(db: Session, student: User, application_id: int) -> dict:
+    app = _get_owned_application(db, student, application_id)
+    scholarship = _ensure_editable(db, app)
+    _get_eligible_scholarship(db, student, scholarship.scholarship_id)
+    missing: list[str] = []
+    required_fields = {
+        "statement": "申請理由",
+        "contact_phone": "聯絡電話",
+        "address": "通訊地址",
+        "household_status": "家庭狀況",
+    }
+    for field, label in required_fields.items():
+        value = getattr(app, field)
+        if value is None or not str(value).strip():
+            missing.append(label)
+    if missing:
+        raise HTTPException(status_code=400, detail=f"申請資料不完整：{ '、'.join(missing) }")
+    app.status = "UNDER_REVIEW"
+    app.submitted_at = datetime.now()
+    db.commit()
+    db.refresh(app)
     ncs_service.create_notification(
-        db, student.user_id, "申請已送出", f"你已成功申請「{sch.name}」，目前狀態：審核中。", commit=True
+        db,
+        student.user_id,
+        "申請已送出",
+        f"你已成功申請「{scholarship.name}」，目前狀態：審核中。",
+        commit=True,
     )
     return _to_out(db, app)
+
+
+def apply(db: Session, student: User, data: ApplicationCreate) -> dict:
+    """相容舊呼叫：建立草稿後立即送出。"""
+    draft = create_draft(db, student, data)
+    return submit_application(db, student, draft["application_id"])
 
 
 def list_my_applications(db: Session, student: User) -> list[dict]:

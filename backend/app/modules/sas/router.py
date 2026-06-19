@@ -13,6 +13,7 @@ from app.modules.sas import service
 from app.modules.sas.schemas import (
     ApplicationCreate,
     ApplicationOut,
+    ApplicationUpdate,
     ProfileOut,
     ProfileUpdate,
     ScholarshipEligibilityOut,
@@ -43,13 +44,45 @@ def available_scholarships(
 
 
 @router.post("/applications", response_model=ApplicationOut, status_code=status.HTTP_201_CREATED)
-def apply(body: ApplicationCreate, db: Session = Depends(get_db), student: User = Depends(require_roles("STUDENT"))):
-    return service.apply(db, student, body)
+def create_draft(
+    body: ApplicationCreate,
+    db: Session = Depends(get_db),
+    student: User = Depends(require_roles("STUDENT")),
+):
+    return service.create_draft(db, student, body)
 
 
 @router.get("/applications/me", response_model=list[ApplicationOut])
 def my_applications(db: Session = Depends(get_db), student: User = Depends(require_roles("STUDENT"))):
     return service.list_my_applications(db, student)
+
+
+@router.get("/applications/{application_id}", response_model=ApplicationOut)
+def get_application(
+    application_id: int,
+    db: Session = Depends(get_db),
+    student: User = Depends(require_roles("STUDENT")),
+):
+    return service.get_my_application(db, student, application_id)
+
+
+@router.put("/applications/{application_id}", response_model=ApplicationOut)
+def update_draft(
+    application_id: int,
+    body: ApplicationUpdate,
+    db: Session = Depends(get_db),
+    student: User = Depends(require_roles("STUDENT")),
+):
+    return service.update_draft(db, student, application_id, body)
+
+
+@router.post("/applications/{application_id}/submit", response_model=ApplicationOut)
+def submit_application(
+    application_id: int,
+    db: Session = Depends(get_db),
+    student: User = Depends(require_roles("STUDENT")),
+):
+    return service.submit_application(db, student, application_id)
 
 
 @router.get("/profile", response_model=ProfileOut)
