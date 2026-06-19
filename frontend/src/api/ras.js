@@ -21,9 +21,58 @@ export function submitReviewDecision(reviewerId, applicationId, decision) {
   )
 }
 
-export function requestSupplement(reviewerId, applicationId, comment) {
+export function requestSupplement(reviewerId, applicationId, comment, deadline) {
   return withApiFallback(
-    () => http.post(`/ras/applications/${applicationId}/supplement-request`, { comment }),
-    () => mock.requestSupplement(reviewerId, applicationId, comment),
+    () => http.post(`/ras/applications/${applicationId}/decision`, { result: 'NEED_SUPPLEMENT', comment, supplement_deadline: deadline }),
+    () => mock.submitReviewDecision(reviewerId, applicationId, { result: 'NEED_SUPPLEMENT', comment, supplement_deadline: deadline }),
   )
+}
+
+export function logView(applicationId) {
+  return withApiFallback(
+    () => http.post(`/ras/applications/${applicationId}/view`),
+    () => Promise.resolve({ detail: '已記錄查看操作' })
+  )
+}
+
+export function getAwardList(params) {
+  return withApiFallback(
+    () => http.get('/ras/award-list', { params }),
+    () => mock.getAwardList(params)
+  )
+}
+
+export function getStatistics(params) {
+  return withApiFallback(
+    () => http.get('/ras/statistics', { params }),
+    () => mock.getStatistics(params)
+  )
+}
+
+export function exportStatisticsCsv(params) {
+  return http.get('/ras/statistics/export', { params, responseType: 'blob' })
+    .then(response => {
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', params?.year ? `statistics_${params.year}.csv` : 'statistics_all.csv')
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    })
+    .catch(async () => {
+      // fallback mock download
+      const csvContent = await mock.exportStatisticsCsvData(params)
+      // 加入 BOM 讓 Excel 可以正確顯示中文
+      const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', params?.year ? `mock_statistics_${params.year}.csv` : 'mock_statistics_all.csv')
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    })
 }

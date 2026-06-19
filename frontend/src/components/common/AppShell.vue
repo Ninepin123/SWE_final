@@ -21,6 +21,8 @@ const navGroups = [
       { label: '我的申請', to: '/applications', roles: ['STUDENT'], icon: 'application' },
       { label: '個人資料', to: '/profile', roles: ['STUDENT'], icon: 'profile' },
       { label: '申請案審查', to: '/reviews', roles: ['REVIEWER'], icon: 'review' },
+      { label: '核發名單', to: '/award-list', roles: ['REVIEWER', 'ADMIN'], icon: 'list' },
+      { label: '年度統計與報表', to: '/statistics', roles: ['REVIEWER', 'ADMIN'], icon: 'chart' },
       { label: '推薦信邀請', to: '/recommendations', roles: ['RECOMMENDER'], icon: 'recommend' },
     ],
   },

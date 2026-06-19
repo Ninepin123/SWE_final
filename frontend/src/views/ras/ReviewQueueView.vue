@@ -10,6 +10,7 @@ import {
   listReviewApplications,
   requestSupplement,
   submitReviewDecision,
+  logView,
 } from '@/api/ras'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -20,11 +21,13 @@ const loading = ref(true)
 const applications = ref([])
 const keyword = ref('')
 const statusFilter = ref('')
+const sortBy = ref('gpa_desc')
 const selected = ref(null)
 const error = ref('')
 const decision = reactive({
   result: 'APPROVED',
   comment: '',
+  deadline: ''
 })
 
 const filteredApplications = computed(() => {
@@ -57,14 +60,21 @@ function formatDate(value) {
 }
 
 async function reload() {
-  applications.value = await listReviewApplications()
+  applications.value = await listReviewApplications({ sort_by: sortBy.value })
 }
 
-function openDetail(application) {
+async function openDetail(application) {
   selected.value = application
   decision.result = 'APPROVED'
   decision.comment = ''
+  decision.deadline = ''
   error.value = ''
+  // Log the view action in the backend
+  try {
+    await logView(application.id)
+  } catch (e) {
+    console.error('Failed to log view:', e)
+  }
 }
 
 async function saveDecision() {
@@ -85,10 +95,22 @@ async function supplement() {
     error.value = '請填寫補件要求。'
     return
   }
-  const updated = await requestSupplement(auth.user.id, selected.value.id, decision.comment)
+  if (!decision.deadline) {
+    error.value = '請設定補交期限。'
+    return
+  }
+  const updated = await requestSupplement(auth.user.id, selected.value.id, decision.comment, decision.deadline)
   toast.success('補件通知已送出並留下紀錄')
   await reload()
   selected.value = updated
+}
+
+function previewDocument(doc) {
+  // Simulate opening document
+  toast.info(`正在開啟附件：${doc}`)
+  setTimeout(() => {
+    toast.success(`附件 ${doc} 已下載/開啟完成。`)
+  }, 1000)
 }
 
 onMounted(async () => {
@@ -113,6 +135,15 @@ onMounted(async () => {
             <option value="NEEDS_SUPPLEMENT">需補件</option>
             <option value="APPROVED">已通過</option>
             <option value="REJECTED">未通過</option>
+          </select>
+        </label>
+        <label>
+          <span>排序</span>
+          <select v-model="sortBy" @change="reload">
+            <option value="gpa_desc">GPA (由高到低)</option>
+            <option value="gpa_asc">GPA (由低到高)</option>
+            <option value="time_desc">送出時間 (新到舊)</option>
+            <option value="time_asc">送出時間 (舊到新)</option>
           </select>
         </label>
       </div>
@@ -198,7 +229,16 @@ onMounted(async () => {
           </div>
           <div>
             <dt>文件</dt>
-            <dd>{{ selected.form.documents.join('、') }}</dd>
+            <dd v-if="selected.documents && selected.documents.length">
+              <ul class="document-list">
+                <li v-for="doc in selected.documents" :key="doc">
+                  <a href="#" @click.prevent="previewDocument(doc)">
+                    <Icon name="attachment" /> {{ doc }}
+                  </a>
+                </li>
+              </ul>
+            </dd>
+            <dd v-else class="muted-text">無上傳文件</dd>
           </div>
           <div>
             <dt>申請聲明</dt>
@@ -240,6 +280,10 @@ onMounted(async () => {
             <span>審查意見 / 補件說明</span>
             <textarea v-model="decision.comment" rows="5" />
           </label>
+          <label>
+            <span>補交期限 (僅要求補件時必填)</span>
+            <input v-model="decision.deadline" type="datetime-local" />
+          </label>
         </div>
         <div class="form-actions form-actions--left">
           <button class="secondary-button" type="button" @click="supplement">要求補件</button>
@@ -252,3 +296,28 @@ onMounted(async () => {
     </div>
   </BaseModal>
 </template>
+
+<style scoped>
+.document-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.document-list a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--primary);
+  text-decoration: none;
+  padding: 0.5rem;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  transition: background 0.2s;
+}
+.document-list a:hover {
+  background: var(--surface-3);
+}
+</style>
