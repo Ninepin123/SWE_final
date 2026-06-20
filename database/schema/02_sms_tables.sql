@@ -29,3 +29,56 @@ CREATE TABLE IF NOT EXISTS scholarships (
     CONSTRAINT fk_sch_unit    FOREIGN KEY (unit_id)    REFERENCES units(unit_id),
     CONSTRAINT fk_sch_creator FOREIGN KEY (created_by) REFERENCES users(user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 相容舊版(v1)資料表：新增申請條件、標籤、文件等欄位
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='scholarships' AND column_name='grade_limit');
+SET @s := IF(@c=0, 'ALTER TABLE scholarships ADD COLUMN grade_limit TEXT NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='scholarships' AND column_name='identity_limit');
+SET @s := IF(@c=0, 'ALTER TABLE scholarships ADD COLUMN identity_limit TEXT NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='scholarships' AND column_name='family_status_limit');
+SET @s := IF(@c=0, 'ALTER TABLE scholarships ADD COLUMN family_status_limit TEXT NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='scholarships' AND column_name='require_recommendation');
+SET @s := IF(@c=0, 'ALTER TABLE scholarships ADD COLUMN require_recommendation TINYINT(1) NOT NULL DEFAULT 0', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='scholarships' AND column_name='required_docs');
+SET @s := IF(@c=0, 'ALTER TABLE scholarships ADD COLUMN required_docs TEXT NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='scholarships' AND column_name='tags');
+SET @s := IF(@c=0, 'ALTER TABLE scholarships ADD COLUMN tags TEXT NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='scholarships' AND column_name='criteria_note');
+SET @s := IF(@c=0, 'ALTER TABLE scholarships ADD COLUMN criteria_note TEXT NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='scholarships' AND column_name='start_date');
+SET @s := IF(@c=0, 'ALTER TABLE scholarships ADD COLUMN start_date DATETIME NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+
+-- 新增聯絡資訊欄位
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='scholarships' AND column_name='contact_name');
+SET @s := IF(@c=0, 'ALTER TABLE scholarships ADD COLUMN contact_name VARCHAR(100) NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='scholarships' AND column_name='contact_phone');
+SET @s := IF(@c=0, 'ALTER TABLE scholarships ADD COLUMN contact_phone VARCHAR(50) NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='scholarships' AND column_name='contact_email');
+SET @s := IF(@c=0, 'ALTER TABLE scholarships ADD COLUMN contact_email VARCHAR(100) NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='scholarships' AND column_name='contact_address');
+SET @s := IF(@c=0, 'ALTER TABLE scholarships ADD COLUMN contact_address VARCHAR(255) NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='scholarships' AND column_name='website');
+SET @s := IF(@c=0, 'ALTER TABLE scholarships ADD COLUMN website VARCHAR(255) NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+
+-- 動態分類與標籤選項表
+ALTER TABLE scholarships MODIFY COLUMN category VARCHAR(50) NOT NULL DEFAULT 'OTHER';
+
+CREATE TABLE IF NOT EXISTS scholarship_options (
+    option_id INT AUTO_INCREMENT PRIMARY KEY,
+    type ENUM('CATEGORY', 'TAG') NOT NULL,
+    name VARCHAR(50) NOT NULL,
+    UNIQUE KEY uq_type_name (type, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
