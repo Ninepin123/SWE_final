@@ -56,8 +56,15 @@ export const useAuthStore = defineStore('auth', {
     async loginAs(role) {
       this.loading = true
       try {
-        this.user = await loginAsApi(role)
-        this.token = localStorage.getItem('token')
+        const result = await loginAsApi(role)
+        if (result?.access_token) {
+          localStorage.setItem('token', result.access_token)
+          this.token = result.access_token
+          this.user = result.user
+        } else {
+          this.user = result
+          this.token = localStorage.getItem('token')
+        }
         return this.user
       } finally {
         this.loading = false

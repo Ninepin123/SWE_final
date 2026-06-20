@@ -62,7 +62,7 @@ def list_applications_for_review(db: Session, reviewer: User, scholarship_id: in
     out: list[dict] = []
     for app, student_name, gpa, scholarship_name in rows:
         review_row = _latest_review(db, app.application_id)
-        recs = trs_service.get_submitted_for_application(db, app.application_id)
+        recs = trs_service.get_recommendations_for_reviewer(db, app.application_id, reviewer)
         
         docs = []
         if app.documents:

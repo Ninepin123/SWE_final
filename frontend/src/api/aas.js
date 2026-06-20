@@ -26,7 +26,8 @@ export function login(credentials) {
 }
 
 export function loginAs(role) {
-  return mock.loginAs(role)
+  if (useMockApi) return mock.loginAs(role)
+  return http.post('/aas/dev-login-as', { role }).then((response) => response.data)
 }
 
 export function logout() {

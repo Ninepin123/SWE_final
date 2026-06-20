@@ -11,6 +11,7 @@ const route = useRoute()
 const auth = useAuthStore()
 const toast = useToastStore()
 const isMock = useMockApi
+const showRoleHelper = import.meta.env.DEV || isMock
 
 const form = reactive({
   account: '',
@@ -86,6 +87,8 @@ async function quickLogin(role) {
     await auth.loginAs(role)
     toast.success(`已登入為${auth.roleLabel}`)
     router.push(route.query.redirect || '/dashboard')
+  } catch (loginError) {
+    error.value = loginError.response?.data?.detail || loginError.message || '快速登入失敗'
   } finally {
     loading.value = false
   }
@@ -131,9 +134,11 @@ async function quickLogin(role) {
         </button>
       </form>
 
-      <div v-if="isMock" class="login-divider dev-only">測試角色快速登入</div>
+      <div v-if="showRoleHelper" class="login-divider dev-only">
+        測試角色快速登入
+      </div>
 
-      <div v-if="isMock" class="role-grid dev-only">
+      <div v-if="showRoleHelper" class="role-grid dev-only">
         <button
           v-for="item in roles"
           :key="item.role"

@@ -4,6 +4,7 @@ import AuditTimeline from '@/components/common/AuditTimeline.vue'
 import BaseCard from '@/components/common/BaseCard.vue'
 import BaseModal from '@/components/common/BaseModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import Icon from '@/components/common/Icon.vue'
 import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import {
@@ -256,8 +257,8 @@ onMounted(async () => {
             <div>
               <strong>{{ request.recommenderName }}</strong>
               <p>{{ request.recommenderTitle }} · {{ request.relationship }}</p>
-              <p v-if="request.content">{{ request.content }}</p>
-              <p v-else class="muted-text">推薦人尚未送出內容。</p>
+              <p v-if="request.contentAvailable && request.content">{{ request.content }}</p>
+              <p v-else class="muted-text">推薦信尚未提交，暫不可檢視內容。</p>
             </div>
             <StatusBadge :value="request.status" />
           </article>

@@ -8,12 +8,24 @@ export function ping() {
   return http.get('/ncs/ping')
 }
 
+function normalizeNotification(item = {}) {
+  return {
+    id: item.id ?? item.notification_id,
+    title: item.title ?? '',
+    message: item.message ?? item.body ?? '',
+    type: item.type ?? 'info',
+    read: item.read ?? item.is_read ?? false,
+    createdAt: item.createdAt ?? item.created_at ?? new Date().toISOString(),
+  }
+}
+
 export function listNotifications(userId) {
   return withApiFallback(() => http.get('/ncs/notifications'), () => mock.listNotifications(userId))
+    .then((items) => (Array.isArray(items) ? items.map(normalizeNotification) : []))
 }
 
 export function markNotificationRead(userId, notificationId) {
-  return withApiFallback(() => http.put(`/ncs/notifications/${notificationId}/read`), () =>
+  return withApiFallback(() => http.post(`/ncs/notifications/${notificationId}/read`), () =>
     mock.markNotificationRead(userId, notificationId),
   )
 }

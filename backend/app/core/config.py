@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     database_url: str = "mysql+pymysql://nuksams_dev:nuksams_dev_password@127.0.0.1:3307/nuksams?charset=utf8mb4"
     secret_key: str = "dev-secret-change-me"
     access_token_expire_minutes: int = 30
+    enable_dev_quick_login: bool = True
     cors_origins: list[str] = ["http://localhost:5173"]
 
 

@@ -30,6 +30,17 @@ def authenticate(db: Session, account: str, password: str) -> User:
     return user
 
 
+def get_active_user_by_role(db: Session, role: str) -> User:
+    user = db.scalar(
+        select(User)
+        .where(User.role == role, User.status == "ACTIVE")
+        .order_by(User.user_id.asc())
+    )
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"找不到可用的 {role} 測試帳號")
+    return user
+
+
 def start_session(db: Session, user: User) -> str:
     """AAS003：登入時建立新的 session 識別碼並輪替舊值（使其他裝置的 token 失效）。"""
     jti = uuid.uuid4().hex

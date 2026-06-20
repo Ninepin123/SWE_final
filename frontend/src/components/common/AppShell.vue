@@ -58,6 +58,10 @@ const roleOptions = computed(() =>
 )
 
 async function switchRole(event) {
+  if (!useMockApi) {
+    toast.info('真 API 模式不支援快速切換角色，請登出後以對應帳號登入。')
+    return
+  }
   await auth.loginAs(event.target.value)
   toast.info(`已切換為${auth.roleLabel}`)
   router.push('/dashboard')
@@ -108,7 +112,7 @@ async function logout() {
         </div>
         <div class="topbar__actions">
           <!-- 開發期角色切換器：正式環境透過 body.dev-mode 控制顯示 -->
-          <label class="role-switcher dev-only">
+          <label v-if="useMockApi" class="role-switcher dev-only">
             <span>測試角色</span>
             <select :value="auth.role" @change="switchRole">
               <option v-for="option in roleOptions" :key="option.value" :value="option.value">
