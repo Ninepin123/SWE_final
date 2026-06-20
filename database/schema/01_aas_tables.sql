@@ -32,6 +32,39 @@ CREATE TABLE IF NOT EXISTS users (
     CONSTRAINT fk_users_unit FOREIGN KEY (unit_id) REFERENCES units(unit_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 舊資料庫升級：若 users 建立於早期版本，補上 AAS003 需要的 session 欄位
+SET @has_session_token := (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'users'
+      AND COLUMN_NAME = 'session_token'
+);
+SET @sql_session_token := IF(
+    @has_session_token = 0,
+    'ALTER TABLE users ADD COLUMN session_token VARCHAR(64) NULL',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql_session_token;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_session_expires_at := (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'users'
+      AND COLUMN_NAME = 'session_expires_at'
+);
+SET @sql_session_expires_at := IF(
+    @has_session_expires_at = 0,
+    'ALTER TABLE users ADD COLUMN session_expires_at DATETIME NULL',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql_session_expires_at;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 -- 稽核紀錄（4.2.5 / NUKSAMS038）：記錄管理與審查等重要操作
 CREATE TABLE IF NOT EXISTS audit_logs (
     log_id      INT AUTO_INCREMENT PRIMARY KEY,

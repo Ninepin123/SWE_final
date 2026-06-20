@@ -11,8 +11,11 @@ class ReviewDecision(BaseModel):
 
 
 class ReviewRecommendation(BaseModel):
+    rec_id: int | None = None
     teacher_name: str | None = None
+    status: str | None = None
     content: str | None = None
+    content_available: bool = False
 
 
 class ReviewApplicationOut(BaseModel):

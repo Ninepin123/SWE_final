@@ -139,6 +139,13 @@ Step "資料庫 schema"
 & $py (Join-Path $root "scripts\init_db.py")
 if ($LASTEXITCODE -ne 0) { Fail "資料庫初始化失敗（見上方訊息）" }
 
+Step "建立開發示範帳號"
+Push-Location (Join-Path $root "backend")
+& $py -m app.modules.aas.dev_seed
+$seedCode = $LASTEXITCODE
+Pop-Location
+if ($seedCode -ne 0) { Fail "建立示範帳號失敗（見上方訊息）" }
+
 # ---------- 6. 前端套件 ----------
 Step "前端環境 (frontend/node_modules)"
 $needNpm = -not (Test-Path (Join-Path $root "frontend\node_modules"))

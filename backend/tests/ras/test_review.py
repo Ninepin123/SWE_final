@@ -127,6 +127,20 @@ def mk_application(db, *, student_id, scholarship_id, status="UNDER_REVIEW"):
     return a
 
 
+def mk_recommendation(db, *, application_id, student_id, teacher_id, status="REQUESTED", content=None):
+    recommendation = Recommendation(
+        application_id=application_id,
+        student_id=student_id,
+        teacher_id=teacher_id,
+        status=status,
+        content=content,
+    )
+    db.add(recommendation)
+    db.commit()
+    db.refresh(recommendation)
+    return recommendation
+
+
 def auth(user):
     return {"Authorization": f"Bearer {create_access_token(user.user_id, user.role)}"}
 
@@ -257,6 +271,46 @@ def test_decide_invalid_result_is_rejected(client, scenario):
         headers=auth(scenario["reviewer_a"]),
     )
     assert r.status_code == 400
+
+
+def test_reviewer_can_view_submitted_recommendation_content(client, db_session, scenario):
+    teacher = mk_user(db_session, "teacher-submitted", role="TEACHER")
+    mk_recommendation(
+        db_session,
+        application_id=scenario["app_high"].application_id,
+        student_id=scenario["stu_high"].user_id,
+        teacher_id=teacher.user_id,
+        status="SUBMITTED",
+        content="這是已提交推薦信內容",
+    )
+
+    response = client.get("/api/ras/applications", headers=auth(scenario["reviewer_a"]))
+    assert response.status_code == 200
+    target = next(item for item in response.json() if item["application_id"] == scenario["app_high"].application_id)
+    assert target["recommendations"]
+    assert target["recommendations"][0]["status"] == "SUBMITTED"
+    assert target["recommendations"][0]["content"] == "這是已提交推薦信內容"
+    assert target["recommendations"][0]["content_available"] is True
+
+
+def test_reviewer_cannot_view_draft_recommendation_content(client, db_session, scenario):
+    teacher = mk_user(db_session, "teacher-draft", role="TEACHER")
+    mk_recommendation(
+        db_session,
+        application_id=scenario["app_high"].application_id,
+        student_id=scenario["stu_high"].user_id,
+        teacher_id=teacher.user_id,
+        status="DRAFT",
+        content="草稿內容不可給 reviewer",
+    )
+
+    response = client.get("/api/ras/applications", headers=auth(scenario["reviewer_a"]))
+    assert response.status_code == 200
+    target = next(item for item in response.json() if item["application_id"] == scenario["app_high"].application_id)
+    assert target["recommendations"]
+    draft_item = next(item for item in target["recommendations"] if item["status"] == "DRAFT")
+    assert draft_item["content"] is None
+    assert draft_item["content_available"] is False
 
 
 # ---- RAS014-015：核發名單 ----

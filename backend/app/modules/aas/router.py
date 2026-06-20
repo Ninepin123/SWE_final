@@ -8,14 +8,17 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.modules.aas import service
 from app.modules.aas.models import User
 from app.modules.aas.monitoring import build_metrics, metrics
+from app.modules.trs import service as trs_service
 from app.modules.aas.schemas import (
     AuditLogOut,
     LoginRequest,
     MonitoringMetricsOut,
+    RoleQuickLoginRequest,
     TeacherOut,
     TokenResponse,
     UserCreate,
@@ -25,6 +28,7 @@ from app.modules.aas.schemas import (
 from app.modules.aas.security import create_access_token, get_current_user, require_roles
 
 router = APIRouter(prefix="/api/aas", tags=["AAS 帳號與權限管理"])
+VALID_ROLES = {"STUDENT", "TEACHER", "SPONSOR", "REVIEWER", "ADMIN"}
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -37,6 +41,25 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         raise
     service.write_audit(db, user.user_id, "LOGIN_SUCCESS", "user", user.user_id, "登入成功")
     # AAS003：建立單一登入 session，將 jti 寫入 token；其他裝置先前的 token 立即失效。
+    jti = service.start_session(db, user)
+    token = create_access_token(user.user_id, user.role, jti=jti)
+    return TokenResponse(access_token=token, user=UserOut.model_validate(user))
+
+
+@router.post("/dev-login-as", response_model=TokenResponse)
+def dev_login_as(body: RoleQuickLoginRequest, db: Session = Depends(get_db)):
+    """開發用快速登入：依角色直接取得一個啟用中的帳號。"""
+    if not settings.enable_dev_quick_login:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    role = body.role.strip().upper()
+    if role not in VALID_ROLES:
+        raise HTTPException(status_code=400, detail="角色不存在")
+
+    user = service.get_active_user_by_role(db, role)
+    if role == "TEACHER":
+        trs_service.ensure_dev_teacher_recommendations(db, user, count=6)
+    service.write_audit(db, user.user_id, "DEV_QUICK_LOGIN", "user", user.user_id, f"開發快速登入（{role}）")
     jti = service.start_session(db, user)
     token = create_access_token(user.user_id, user.role, jti=jti)
     return TokenResponse(access_token=token, user=UserOut.model_validate(user))

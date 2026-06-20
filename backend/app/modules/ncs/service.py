@@ -20,6 +20,27 @@ def create_notification(db: Session, user_id: int, title: str, body: str | None 
     return n
 
 
+def notification_exists(db: Session, user_id: int, title: str, body: str | None = None) -> bool:
+    stmt = select(Notification.notification_id).where(
+        Notification.user_id == user_id,
+        Notification.title == title,
+        Notification.body == body,
+    )
+    return db.scalar(stmt) is not None
+
+
+def create_notification_if_absent(
+    db: Session,
+    user_id: int,
+    title: str,
+    body: str | None = None,
+    commit: bool = True,
+) -> Notification | None:
+    if notification_exists(db, user_id, title, body):
+        return None
+    return create_notification(db, user_id=user_id, title=title, body=body, commit=commit)
+
+
 def list_my(db: Session, user: User) -> list[Notification]:
     return list(
         db.scalars(

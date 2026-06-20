@@ -472,12 +472,155 @@ export async function fetchMe() {
   return delay(user)
 }
 
+function ensureTeacherQuickLoginRecommendations(state, teacherUserId, count = 6) {
+  if (!teacherUserId || count <= 0) return
+
+  for (let index = 1; index <= count; index += 1) {
+    const suffix = String(index).padStart(2, '0')
+    const studentId = `u-trs-student-${suffix}`
+    const studentAccount = `DEVTRS${suffix}`
+    const scholarshipId = `sch-trs-quick-${suffix}`
+    const applicationId = `app-trs-quick-${suffix}`
+    const recommendationId = `rec-trs-quick-${suffix}`
+
+    let student = state.users.find((item) => item.id === studentId)
+    if (!student) {
+      student = {
+        id: studentId,
+        account: studentAccount,
+        name: `TRS 測試學生 ${index}`,
+        email: `devtrs${suffix}@nuk.edu.tw`,
+        role: 'STUDENT',
+        unit: '資訊工程學系',
+        status: 'ACTIVE',
+        phone: `0900-000-${suffix}`,
+        createdAt: todayIso(),
+      }
+      state.users.push(student)
+    }
+
+    if (!state.profiles[studentId]) {
+      state.profiles[studentId] = {
+        studentId: studentAccount,
+        name: student.name,
+        department: '資訊工程學系',
+        grade: '三年級',
+        email: student.email,
+        phone: student.phone,
+        address: '高雄市楠梓區大學路 700 號',
+        gpa: 3.4 + index * 0.05,
+        credits: 80 + index,
+        familyStatus: '一般戶',
+        bankAccount: `808-0000${suffix}`,
+        emergencyContact: `聯絡人${index} 09${suffix}-123-456`,
+        updatedAt: todayIso(),
+      }
+    }
+
+    let scholarship = state.scholarships.find((item) => item.id === scholarshipId)
+    if (!scholarship) {
+      const deadline = new Date(Date.now() + (index + 2) * 24 * 60 * 60 * 1000)
+      scholarship = {
+        id: scholarshipId,
+        title: `TRS 快速測試獎學金 ${index}`,
+        category: '校內獎學金',
+        sponsor: '學生事務處',
+        amount: 10000 + index * 1000,
+        quota: 20,
+        usedQuota: 1,
+        deadline: deadline.toISOString().slice(0, 10),
+        status: 'OPEN',
+        tags: ['快速測試', 'TRS'],
+        description: '快速登入測試推薦邀請用。',
+        criteria: {
+          minGpa: 2.5,
+          departments: ['不限科系'],
+          note: '開發資料',
+        },
+        requiredDocs: ['成績單'],
+        requireRecommendation: true,
+      }
+      state.scholarships.unshift(scholarship)
+    }
+
+    let application = state.applications.find((item) => item.id === applicationId)
+    if (!application) {
+      application = {
+        id: applicationId,
+        scholarshipId,
+        studentId,
+        status: 'UNDER_REVIEW',
+        submittedAt: todayIso(),
+        updatedAt: todayIso(),
+        form: {
+          personal: {
+            phone: student.phone,
+            address: state.profiles[studentId].address,
+          },
+          academics: {
+            gpa: state.profiles[studentId].gpa,
+            credits: state.profiles[studentId].credits,
+            achievements: '快速登入測試資料。',
+          },
+          finance: {
+            familyStatus: state.profiles[studentId].familyStatus,
+            monthlyExpense: 9000,
+          },
+          statement: '快速登入測試申請。',
+          documents: ['成績單'],
+        },
+        recommendationIds: [],
+        auditLogs: [],
+      }
+      state.applications.unshift(application)
+    }
+
+    let recommendation = state.recommendations.find((item) => item.id === recommendationId)
+    if (!recommendation) {
+      recommendation = {
+        id: recommendationId,
+        applicationId,
+        studentId,
+        recommenderUserId: teacherUserId,
+        recommenderName: '陳明哲',
+        recommenderEmail: 'teacher@nuk.edu.tw',
+        recommenderTitle: '資訊管理學系副教授',
+        relationship: '導師',
+        status: 'PENDING',
+        inviteToken: createId('INV-TRS'),
+        invitedAt: todayIso(),
+        submittedAt: null,
+        content: '',
+      }
+      state.recommendations.unshift(recommendation)
+    }
+
+    if (!application.recommendationIds.includes(recommendation.id)) {
+      application.recommendationIds.push(recommendation.id)
+    }
+  }
+}
+
 export async function loginAs(role) {
-  const state = getState()
-  const user = state.users.find((item) => item.role === role && item.status === 'ACTIVE')
+  let state = getState()
+  let user = state.users.find((item) => item.role === role && item.status === 'ACTIVE')
+
+  // localStorage 內的舊版或損壞 mock 狀態可能缺少預設角色，遇到時自動重置一次。
+  if (!user) {
+    resetMockState()
+    state = getState()
+    user = state.users.find((item) => item.role === role && item.status === 'ACTIVE')
+  }
+
   if (!user) {
     throw new Error('找不到可登入的角色帳號')
   }
+
+  if (user.role === 'TEACHER') {
+    ensureTeacherQuickLoginRecommendations(state, user.id, 6)
+    saveState(state)
+  }
+
   localStorage.setItem(CURRENT_USER_KEY, user.id)
   localStorage.setItem('token', `mock-token-${user.id}`)
   return delay(user)
@@ -963,9 +1106,21 @@ export async function requestSupplement(reviewerUserId, applicationId, comment) 
   return delay(hydrateApplication(state, application), 180)
 }
 
-export async function listRecommendationRequests(recommenderUserId) {
+export async function listRecommendationRequests(recommenderUserId, params = {}) {
   const state = getState()
-  const items = state.recommendations
+
+  const teacherUser = getUserById(state, recommenderUserId)
+  if (teacherUser?.role === 'TEACHER') {
+    const currentCount = state.recommendations.filter(
+      (item) => item.recommenderUserId === recommenderUserId,
+    ).length
+    if (currentCount < 6) {
+      ensureTeacherQuickLoginRecommendations(state, recommenderUserId, 6)
+      saveState(state)
+    }
+  }
+
+  let items = state.recommendations
     .filter((item) => item.recommenderUserId === recommenderUserId)
     .map((request) => {
       const application = state.applications.find((item) => item.id === request.applicationId)
@@ -974,7 +1129,167 @@ export async function listRecommendationRequests(recommenderUserId) {
         application: application ? hydrateApplication(state, application) : null,
       }
     })
+
+  const keyword = params.keyword?.trim().toLowerCase()
+  if (keyword) {
+    items = items.filter((request) => {
+      const scholarshipTitle = request.application?.scholarship?.title ?? ''
+      const studentName = request.application?.student?.name ?? ''
+      const studentAccount = request.application?.student?.account ?? ''
+      return [scholarshipTitle, studentName, studentAccount].some((field) =>
+        String(field).toLowerCase().includes(keyword),
+      )
+    })
+  }
+
+  if (params.status) {
+    items = items.filter((request) => request.status === params.status)
+  }
+
+  const sortBy = params.sort_by ?? 'deadline'
+  const order = params.order === 'desc' ? 'desc' : 'asc'
+  const direction = order === 'asc' ? 1 : -1
+  items = items.slice().sort((left, right) => {
+    const leftStudent = left.application?.student?.name ?? ''
+    const rightStudent = right.application?.student?.name ?? ''
+    const leftScholarship = left.application?.scholarship?.title ?? ''
+    const rightScholarship = right.application?.scholarship?.title ?? ''
+    const leftDeadline = left.application?.scholarship?.deadline ?? ''
+    const rightDeadline = right.application?.scholarship?.deadline ?? ''
+    const leftSubmittedAt = left.submittedAt ?? ''
+    const rightSubmittedAt = right.submittedAt ?? ''
+    const valueMap = {
+      deadline: [leftDeadline, rightDeadline],
+      submitted_at: [leftSubmittedAt, rightSubmittedAt],
+      student_name: [leftStudent, rightStudent],
+      scholarship_name: [leftScholarship, rightScholarship],
+      status: [left.status ?? '', right.status ?? ''],
+    }
+    const [leftValue, rightValue] = valueMap[sortBy] ?? valueMap.deadline
+    if (leftValue < rightValue) return -1 * direction
+    if (leftValue > rightValue) return 1 * direction
+    return 0
+  })
+
   return delay(items)
+}
+
+export async function getTeacherRecommendationDashboard(recommenderUserId) {
+  const state = getState()
+  const now = new Date()
+  const dueSoon = new Date(now.getTime() + 48 * 60 * 60 * 1000)
+  const items = state.recommendations
+    .filter((item) => item.recommenderUserId === recommenderUserId)
+    .map((request) => {
+      const application = state.applications.find((item) => item.id === request.applicationId)
+      const scholarship = application
+        ? state.scholarships.find((item) => item.id === application.scholarshipId)
+        : null
+      return {
+        ...request,
+        deadline: scholarship?.deadline ?? null,
+      }
+    })
+
+  const isPending = (status) => ['REQUESTED', 'PENDING'].includes(status)
+  const isDueSoon = (item) => item.status !== 'SUBMITTED' && item.deadline && new Date(item.deadline) >= now && new Date(item.deadline) <= dueSoon
+  const isOverdue = (item) => item.status !== 'SUBMITTED' && item.deadline && new Date(item.deadline) < now
+
+  return delay({
+    total_count: items.length,
+    pending_count: items.filter((item) => isPending(item.status)).length,
+    draft_count: items.filter((item) => item.status === 'DRAFT').length,
+    submitted_count: items.filter((item) => item.status === 'SUBMITTED').length,
+    due_soon_count: items.filter(isDueSoon).length,
+    overdue_count: items.filter(isOverdue).length,
+  })
+}
+
+export async function getRecommendationStudentProfile(recommenderUserId, requestId) {
+  const state = getState()
+  const request = state.recommendations.find((item) => item.id === requestId)
+  if (!request || request.recommenderUserId !== recommenderUserId) {
+    throw new Error('你沒有權限查看此學生資料')
+  }
+
+  const application = state.applications.find((item) => item.id === request.applicationId)
+  if (!application) {
+    throw new Error('找不到推薦案件或學生資料')
+  }
+
+  const student = getUserById(state, application.studentId)
+  const profile = state.profiles[application.studentId] ?? null
+  const scholarship = state.scholarships.find((item) => item.id === application.scholarshipId)
+  const documents = Array.isArray(application.form?.documents)
+    ? application.form.documents.map((title, index) => ({
+        document_id: `${application.id}-doc-${index + 1}`,
+        document_type: 'OTHER',
+        title,
+        content_text: '',
+      }))
+    : []
+
+  return delay({
+    rec_id: request.id,
+    application_id: application.id,
+    status: request.status,
+    student: student
+      ? {
+          user_id: student.id,
+          name: student.name,
+          account: student.account,
+          email: student.email,
+        }
+      : null,
+    profile: profile
+      ? {
+          grade: profile.grade,
+          identity_type: profile.identity_type ?? profile.identityType ?? null,
+          contact_email: profile.email ?? null,
+          contact_phone: profile.phone ?? null,
+          address: profile.address ?? null,
+          emergency_contact_name: profile.emergencyContact ?? null,
+          emergency_contact_phone: null,
+        }
+      : null,
+    application: {
+      application_id: application.id,
+      status: application.status,
+      submitted_at: application.submittedAt ?? null,
+    },
+    scholarship: scholarship
+      ? {
+          scholarship_id: scholarship.id,
+          name: scholarship.title,
+          deadline: scholarship.deadline,
+        }
+      : null,
+    documents,
+  })
+}
+
+export async function saveRecommendationDraft(recommenderUserId, requestId, content) {
+  const state = getState()
+  const request = state.recommendations.find((item) => item.id === requestId)
+  if (!request || request.recommenderUserId !== recommenderUserId) {
+    throw new Error('找不到推薦邀請')
+  }
+  if (request.status === 'SUBMITTED') {
+    throw new Error('已送出的推薦信不可修改')
+  }
+
+  request.status = 'DRAFT'
+  request.content = content
+  const application = state.applications.find((item) => item.id === request.applicationId)
+  if (application) {
+    application.updatedAt = todayIso()
+  }
+
+  saveState(state)
+  return delay({
+    ...request,
+    application: application ? hydrateApplication(state, application) : null,
+  })
 }
 
 export async function submitRecommendation(recommenderUserId, requestId, content) {
@@ -983,6 +1298,9 @@ export async function submitRecommendation(recommenderUserId, requestId, content
   const request = state.recommendations.find((item) => item.id === requestId)
   if (!request || request.recommenderUserId !== recommenderUserId) {
     throw new Error('找不到推薦邀請')
+  }
+  if (request.status === 'SUBMITTED') {
+    throw new Error('已送出的推薦信不可修改')
   }
   request.status = 'SUBMITTED'
   request.content = content

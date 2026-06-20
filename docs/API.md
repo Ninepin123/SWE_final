@@ -135,7 +135,33 @@
 
 ## TRS 教師推薦
 
-（v2 已實作，詳見下方「v2 變更與新增 → TRS」。）
+### GET /api/trs/recommendations/teacher  （僅 TEACHER）
+- Query：`keyword?`, `status?`, `sort_by?`, `order?`
+- Response：`RecommendationTeacherOut[]`
+- 僅回傳目前登入教師自己的推薦案件。
+
+### PUT /api/trs/recommendations/{rec_id}  （僅 TEACHER）
+- Request：`{ content?: string, submit: boolean }`
+- `submit=false`：存草稿（`DRAFT`）
+- `submit=true`：正式提交（`SUBMITTED`）
+- 已提交案件不可再修改（回 409）。
+- 提交後會發送站內通知給學生與審查對象。
+
+### GET /api/trs/recommendations/{rec_id}/student-profile  （僅 TEACHER）
+- 只允許被指派該推薦案件的教師查看。
+- 非負責教師或學生存取回 403。
+
+### GET /api/trs/recommendations/student  （僅 STUDENT）
+- Response 僅含推薦狀態資訊：`rec_id, application_id, teacher_id/teacher_name, status, submitted_at, deadline, scholarship_name`。
+- 不回傳推薦信內容欄位（`content`, `draft_content`, `letter_content`）。
+
+### GET /api/trs/recommendations/teacher/dashboard  （僅 TEACHER）
+- 回傳 `total_count`, `pending_count`, `draft_count`, `submitted_count`, `due_soon_count`, `overdue_count`。
+
+### POST /api/trs/recommendations/due-soon-notifications  （僅 ADMIN）
+- 手動觸發 48 小時內即將截止且未提交推薦案件提醒（站內通知）。
+- Response：`{ checked_count, created_count }`
+- 僅手動觸發，不含排程器。
 
 ## NCS 通知與溝通
 
@@ -169,7 +195,7 @@
 
 ## RAS（變更）
 - 兩支端點改為 **僅 REVIEWER**（移除 ADMIN）。
-- `GET /api/ras/applications` 回傳加入：完整申請表欄位、`recommendations[]`（已送出的推薦信內容）、以及最近一次審查紀錄 `reviewer_name / review_result / review_comment / reviewed_at`。
+- `GET /api/ras/applications` 回傳加入：完整申請表欄位、`recommendations[]`（僅 `SUBMITTED` 會有 `content`；`REQUESTED/DRAFT/PENDING` 只回傳狀態與 `content_available=false`）、以及最近一次審查紀錄 `reviewer_name / review_result / review_comment / reviewed_at`。
 - `POST .../decision` 會寫入審查紀錄並通知學生審查結果。
 
 ## TRS 教師推薦（新增實作）
