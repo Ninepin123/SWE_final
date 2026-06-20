@@ -1,0 +1,572 @@
+/* Visual Refresh — 校務系統 2.0：現代平台 × 學院公文特色 */
+:root {
+  --paper: #f6f1e7;
+  --surface: #fffdf8;
+  --surface-muted: #f7f0e2;
+  --surface-sunken: #efe6d4;
+  --line: #e6dcc8;
+  --line-strong: #d3c3a5;
+  --primary: #2f6b4f;
+  --primary-strong: #24543e;
+  --primary-soft: #e7f1eb;
+  --primary-tint: #f3f8f5;
+  --gold: #a8792a;
+  --gold-soft: #f5ead0;
+  --seal: #b84635;
+  --text: #1f2a24;
+  --text-secondary: #526157;
+  --muted: #736a5b;
+  --shadow-xs: 0 1px 2px rgba(37, 30, 18, 0.05);
+  --shadow-sm: 0 8px 24px rgba(48, 38, 22, 0.08);
+  --shadow-md: 0 16px 38px rgba(48, 38, 22, 0.12);
+  --shadow-lg: 0 24px 60px rgba(48, 38, 22, 0.16);
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(47, 107, 79, 0.08), transparent 28rem),
+    linear-gradient(180deg, #faf7f0 0%, var(--paper) 100%);
+}
+
+.app-shell {
+  grid-template-columns: 268px minmax(0, 1fr);
+}
+
+.sidebar {
+  padding: 22px 16px;
+  background: rgba(255, 253, 248, 0.92);
+  backdrop-filter: blur(10px);
+  box-shadow: 12px 0 40px rgba(45, 35, 20, 0.05);
+}
+
+.brand {
+  margin-bottom: 8px;
+  border: 1px solid rgba(47, 107, 79, 0.12);
+  background: linear-gradient(135deg, #fffdf8, #f5efe2);
+}
+
+.sidebar__link {
+  position: relative;
+  border: 1px solid transparent;
+  font-weight: 650;
+}
+
+.sidebar__link.router-link-active,
+.sidebar__link.router-link-exact-active {
+  border-color: rgba(47, 107, 79, 0.18);
+  background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(47, 107, 79, 0.2);
+}
+
+.sidebar__link.router-link-active .icon,
+.sidebar__link.router-link-exact-active .icon {
+  color: #fff;
+}
+
+.sidebar__dev-note {
+  margin-top: auto;
+  padding: 10px 12px;
+  border: 1px dashed rgba(184, 70, 53, 0.35);
+  border-radius: var(--radius-md);
+  background: rgba(184, 70, 53, 0.06);
+  color: var(--seal);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workspace {
+  min-width: 0;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  min-height: 78px;
+  border-bottom: 1px solid rgba(211, 195, 165, 0.75);
+  background: rgba(250, 247, 240, 0.82);
+  backdrop-filter: blur(16px);
+}
+
+.page-shell {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 30px 34px 54px;
+}
+
+.card {
+  border: 1px solid rgba(211, 195, 165, 0.75);
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow: var(--shadow-sm);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.primary-button,
+.secondary-button,
+.danger-button,
+.ghost-button,
+.icon-button {
+  min-height: 40px;
+  border-radius: 11px;
+  font-weight: 750;
+}
+
+.primary-button {
+  background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+  box-shadow: 0 12px 22px rgba(47, 107, 79, 0.19);
+}
+
+.secondary-button {
+  background: #fffdf8;
+  border-color: rgba(47, 107, 79, 0.24);
+  color: var(--primary-strong);
+}
+
+input,
+select,
+textarea {
+  border-radius: 11px;
+  background: #fffefa;
+  border-color: rgba(211, 195, 165, 0.95);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(47, 107, 79, 0.12);
+}
+
+.login-page {
+  background: #fbf7ef;
+}
+
+.login-hero {
+  background:
+    radial-gradient(circle at 86% 80%, rgba(184, 70, 53, 0.2), transparent 18rem),
+    radial-gradient(circle at 15% 18%, rgba(245, 234, 208, 0.18), transparent 22rem),
+    linear-gradient(145deg, #173a2c 0%, #24543e 55%, #1d3329 100%);
+}
+
+.login-panel {
+  max-width: 560px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.login-form,
+.role-grid {
+  padding: 20px;
+  border: 1px solid rgba(211, 195, 165, 0.72);
+  border-radius: 20px;
+  background: rgba(255, 253, 248, 0.88);
+  box-shadow: var(--shadow-sm);
+}
+
+.role-card {
+  min-height: 142px;
+}
+
+.dashboard-hero,
+.listing-hero,
+.application-hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  overflow: hidden;
+  padding: 28px;
+  border: 1px solid rgba(47, 107, 79, 0.16);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 88% 12%, rgba(168, 121, 42, 0.18), transparent 15rem),
+    linear-gradient(135deg, #fffdf8 0%, #eef6f1 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+.dashboard-hero::after,
+.listing-hero::after,
+.application-hero::after {
+  content: "奬";
+  position: absolute;
+  right: 18px;
+  bottom: -48px;
+  color: rgba(184, 70, 53, 0.08);
+  font-family: var(--font-serif);
+  font-size: 150px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.dashboard-hero h2,
+.listing-hero h2,
+.application-hero h2 {
+  margin-top: 4px;
+  font-size: 30px;
+}
+
+.dashboard-hero p,
+.listing-hero p,
+.application-hero p {
+  max-width: 680px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.dashboard-hero__actions {
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.stat-grid--modern {
+  gap: 16px;
+}
+
+.stat-card--modern {
+  position: relative;
+  overflow: hidden;
+  min-height: 140px;
+  padding: 20px;
+}
+
+.stat-card--modern::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: var(--primary);
+}
+
+.stat-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.stat-card__icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--primary-soft);
+  font-size: 20px;
+}
+
+.stat-card__label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.stat-card--modern strong {
+  margin-top: 10px;
+  font-size: 42px;
+  color: var(--text);
+}
+
+.stat-card--modern p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.stat-card--warning::before { background: #c47a26; }
+.stat-card--warning .stat-card__icon { background: #fff1db; }
+.stat-card--danger::before { background: var(--danger); }
+.stat-card--success::before { background: var(--success); }
+.stat-card--blue::before,
+.stat-card--info::before { background: var(--info); }
+.stat-card--blue .stat-card__icon,
+.stat-card--info .stat-card__icon { background: var(--info-soft); }
+
+.dashboard-two-column {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 18px;
+}
+
+.task-list {
+  display: grid;
+  gap: 12px;
+}
+
+.task-item {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface-muted);
+}
+
+.task-item > span {
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.task-item--warning > span { background: #c47a26; }
+.task-item--success > span { background: var(--success); }
+.task-item--info > span { background: var(--info); }
+.task-item p { margin-top: 4px; color: var(--muted); }
+.workflow-list--compact { grid-template-columns: 1fr; gap: 12px; }
+
+.listing-hero__stats {
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(94px, 1fr));
+  gap: 10px;
+}
+
+.listing-hero__stats span {
+  display: grid;
+  gap: 2px;
+  padding: 14px;
+  border: 1px solid rgba(47, 107, 79, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 253, 248, 0.75);
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+}
+
+.listing-hero__stats strong {
+  color: var(--primary-strong);
+  font-size: 24px;
+}
+
+.toolbar--modern {
+  grid-template-columns: minmax(260px, 1.4fr) minmax(150px, 0.45fr) minmax(150px, 0.45fr);
+  align-items: end;
+}
+
+.filter-card__result {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.scholarship-grid--modern {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.scholarship-card--modern {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+  padding: 22px;
+}
+
+.scholarship-card--disabled {
+  opacity: 0.72;
+  filter: grayscale(0.12);
+}
+
+.scholarship-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.scholarship-card__head h2 {
+  margin-top: 6px;
+}
+
+.scholarship-card__description {
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.scholarship-card__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.scholarship-card__metrics div {
+  padding: 13px;
+  border: 1px solid rgba(211, 195, 165, 0.72);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fffdf8, #faf4e9);
+}
+
+.scholarship-card__metrics span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.scholarship-card__metrics strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.scholarship-card__metrics div:first-child strong {
+  color: var(--gold);
+  font-size: 18px;
+}
+
+.metric--urgent strong {
+  color: #b85c1d !important;
+}
+
+.seat-meter {
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+}
+
+.seat-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), #77a78e);
+}
+
+.criteria-list--compact {
+  padding-top: 4px;
+}
+
+.scholarship-card__actions {
+  margin-top: auto;
+  justify-content: flex-end;
+}
+
+.tag-list--warning span {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.application-hero {
+  align-items: flex-start;
+}
+
+.application-step-card {
+  position: sticky;
+  top: 92px;
+  z-index: 3;
+}
+
+.stepper {
+  gap: 10px;
+}
+
+.stepper__item {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #fffefa;
+}
+
+.stepper__item--active {
+  border-color: rgba(47, 107, 79, 0.35);
+  background: var(--primary-tint);
+  box-shadow: 0 10px 22px rgba(47, 107, 79, 0.1);
+}
+
+.stepper__item--done {
+  background: var(--primary-soft);
+  border-color: rgba(47, 107, 79, 0.22);
+}
+
+.document-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.document-box {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fffdf8, #faf5eb);
+}
+
+.document-box--wide {
+  grid-row: span 2;
+}
+
+.review-list {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.form-actions {
+  position: sticky;
+  bottom: 18px;
+  z-index: 4;
+  padding: 12px;
+  border: 1px solid rgba(211, 195, 165, 0.76);
+  border-radius: 18px;
+  background: rgba(255, 253, 248, 0.88);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-md);
+}
+
+.application-page .form-actions {
+  position: static;
+  margin-top: 4px;
+}
+
+@media (max-width: 1080px) {
+  .dashboard-hero,
+  .listing-hero,
+  .application-hero,
+  .dashboard-two-column {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .scholarship-grid--modern,
+  .document-grid,
+  .toolbar--modern {
+    grid-template-columns: 1fr;
+  }
+
+  .listing-hero__stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .page-shell {
+    padding: 20px 14px 42px;
+  }
+
+  .dashboard-hero,
+  .listing-hero,
+  .application-hero {
+    padding: 22px;
+  }
+
+  .scholarship-card__metrics,
+  .listing-hero__stats {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    position: static;
+  }
+}

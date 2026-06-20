@@ -24,7 +24,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const toast = useToastStore()
 
-const steps = ['聯絡資料', '申請內容', '文字文件', '確認送出']
+const steps = ['基本資料', '申請內容', '附件文件', '確認送出']
 const currentStep = ref(0)
 const loading = ref(true)
 const saving = ref(false)
@@ -204,12 +204,17 @@ onMounted(async () => {
     <RouterLink class="primary-button" to="/applications">查看申請狀態</RouterLink>
   </EmptyState>
 
-  <div v-else-if="scholarship" class="page-grid">
-    <BaseCard :title="scholarship.title" eyebrow="Application">
-      <div class="card-row card-row--between">
-        <p class="muted-text">{{ scholarship.description }}</p>
-        <StatusBadge :value="isDraft ? 'DRAFT' : scholarship.status" />
+  <div v-else-if="scholarship" class="application-page page-grid">
+    <section class="application-hero">
+      <div>
+        <p class="eyebrow">Application Wizard</p>
+        <h2>{{ scholarship.title }}</h2>
+        <p>{{ scholarship.description }}</p>
       </div>
+      <StatusBadge :value="isDraft ? 'DRAFT' : scholarship.status" />
+    </section>
+
+    <BaseCard class="application-step-card">
       <StepForm :steps="steps" :current="currentStep" />
       <p v-if="error" class="form-error">{{ error }}</p>
     </BaseCard>
@@ -248,9 +253,10 @@ onMounted(async () => {
       </div>
     </BaseCard>
 
-    <BaseCard v-if="currentStep === 2" title="確認送出">
-      <div class="form-grid">
-        <label class="form-grid__wide">
+    <BaseCard v-if="currentStep === 2" title="附件文件">
+      <p class="muted-text">目前以文字內容代替實體附件；每一格可視為一份申請附件，送出前至少填寫一份。</p>
+      <div class="document-grid">
+        <label class="document-box">
           <span>成績單內容</span>
           <textarea
             v-model="form.documents.TRANSCRIPT.content_text"
@@ -258,7 +264,7 @@ onMounted(async () => {
             placeholder="請以文字整理主要科目、成績、排名或 GPA 說明"
           />
         </label>
-        <label class="form-grid__wide">
+        <label class="document-box document-box--wide">
           <span>自傳</span>
           <textarea
             v-model="form.documents.AUTOBIOGRAPHY.content_text"
@@ -266,7 +272,7 @@ onMounted(async () => {
             placeholder="請輸入自傳內容"
           />
         </label>
-        <label class="form-grid__wide">
+        <label class="document-box">
           <span>其他證明文件說明</span>
           <textarea
             v-model="form.documents.CERTIFICATE.content_text"
@@ -275,9 +281,6 @@ onMounted(async () => {
           />
         </label>
       </div>
-      <p class="muted-text">
-        目前以文字內容代替實體附件；之後可沿用相同文件類型整合檔案上傳。
-      </p>
     </BaseCard>
 
     <BaseCard v-if="currentStep === 3" title="確認送出">
@@ -342,4 +345,13 @@ onMounted(async () => {
       </button>
     </div>
   </div>
+
+  <EmptyState
+    v-else
+    title="無法載入申請資料"
+    :description="error || '找不到這個獎學金，請回到可申請獎學金列表重新選擇。'"
+    icon="archive"
+  >
+    <RouterLink class="primary-button" to="/scholarships">回到獎學金列表</RouterLink>
+  </EmptyState>
 </template>
