@@ -5,6 +5,7 @@ import BaseCard from '@/components/common/BaseCard.vue'
 import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { getDashboardSummary } from '@/services/mockBackend'
+import { getUnreadNotificationCount } from '@/api/ncs'
 
 const auth = useAuthStore()
 const loading = ref(true)
@@ -16,25 +17,43 @@ const quickLinks = computed(() => {
       { label: '查看可申請獎學金', to: '/scholarships', primary: true },
       { label: '追蹤我的申請', to: '/applications' },
       { label: '更新個人資料', to: '/profile' },
+      { label: '查看公告', to: '/announcements' },
+      { label: '查看通知', to: '/notifications' },
+      { label: '公告中心', to: '/announcements' }
     ],
     REVIEWER: [
       { label: '進入審查工作台', to: '/reviews', primary: true },
+      { label: '查看公告', to: '/announcements' },
       { label: '查看通知', to: '/notifications' },
+      { label: '公告中心', to: '/announcements' }
     ],
     ADMIN: [
       { label: '管理帳號', to: '/admin/users', primary: true },
       { label: '管理獎學金', to: '/admin/scholarships' },
+      { label: '公告管理', to: '/admin/announcements' },
+      { label: '查看公告', to: '/announcements' },
       { label: '查看通知', to: '/notifications' },
+      { label: '公告中心', to: '/announcements' },
+      {
+        label: '公告管理',
+        to: '/admin/announcements',
+        roles: ['ADMIN'],
+      }
     ],
     TEACHER: [
       { label: '處理推薦信邀請', to: '/recommendations', primary: true },
+      { label: '查看公告', to: '/announcements' },
       { label: '查看通知', to: '/notifications' },
+      { label: '公告中心', to: '/announcements' }
     ],
     SPONSOR: [
       { label: '管理獎學金', to: '/admin/scholarships', primary: true },
+      { label: '查看公告', to: '/announcements' },
       { label: '查看通知', to: '/notifications' },
+      { label: '公告中心', to: '/announcements' }
     ],
   }
+
   return links[auth.role] ?? []
 })
 
@@ -45,8 +64,10 @@ const stats = computed(() => {
       { label: '審查中', value: summary.value.underReview ?? 0, tone: 'blue', icon: '🔎', hint: '正在等待審核' },
       { label: '需補件', value: summary.value.needsSupplement ?? 0, tone: 'warning', icon: '⚠️', hint: '請優先處理' },
       { label: '可申請', value: summary.value.availableScholarships ?? 0, tone: 'success', icon: '🎓', hint: '目前開放項目' },
+      { label: '未讀通知', value: summary.value.unread ?? 0, tone: 'info', icon: '🔔', hint: '最新訊息' },
     ]
   }
+
   if (auth.role === 'REVIEWER') {
     return [
       { label: '待處理', value: summary.value.pending ?? 0, tone: 'warning', icon: '📥', hint: '等待審查案件' },
@@ -55,6 +76,7 @@ const stats = computed(() => {
       { label: '未讀通知', value: summary.value.unread ?? 0, tone: 'info', icon: '🔔', hint: '最新訊息' },
     ]
   }
+
   if (auth.role === 'ADMIN') {
     return [
       { label: '帳號數', value: summary.value.users ?? 0, tone: 'info', icon: '👥', hint: '平台使用者' },
@@ -63,6 +85,7 @@ const stats = computed(() => {
       { label: '未讀通知', value: summary.value.unread ?? 0, tone: 'warning', icon: '🔔', hint: '待確認訊息' },
     ]
   }
+
   if (auth.role === 'SPONSOR') {
     return [
       { label: '獎學金', value: summary.value.scholarships ?? 0, tone: 'success', icon: '🏛️', hint: '所屬單位項目' },
@@ -70,6 +93,7 @@ const stats = computed(() => {
       { label: '未讀通知', value: summary.value.unread ?? 0, tone: 'warning', icon: '🔔', hint: '待確認訊息' },
     ]
   }
+
   return [
     { label: '待填推薦信', value: summary.value.pendingRecommendations ?? 0, tone: 'warning', icon: '✍️', hint: '需要處理' },
     { label: '已送出推薦', value: summary.value.submittedRecommendations ?? 0, tone: 'success', icon: '✅', hint: '完成推薦' },
@@ -85,7 +109,8 @@ const guidance = computed(() => {
     TEACHER: '教師可在推薦信邀請中查看學生請求，並追蹤已送出的推薦紀錄。',
     SPONSOR: '獎助單位人員可管理所屬單位的獎學金資料與開放狀態。',
   }
-  return text[auth.role]
+
+  return text[auth.role] ?? '請依照角色使用系統功能。'
 })
 
 const tasks = computed(() => {
@@ -103,10 +128,34 @@ const tasks = computed(() => {
   ]
 })
 
-onMounted(async () => {
-  summary.value = await getDashboardSummary(auth.user)
-  loading.value = false
-})
+async function loadDashboard() {
+  loading.value = true
+
+  try {
+    const dashboardSummary = await getDashboardSummary(auth.user)
+    let unread = dashboardSummary?.unread ?? 0
+
+    try {
+      unread = await getUnreadNotificationCount()
+    } catch (error) {
+      console.warn('取得未讀通知數失敗，改用 dashboard summary 的 unread 值', error)
+    }
+
+    summary.value = {
+      ...(dashboardSummary ?? {}),
+      unread,
+    }
+  } catch (error) {
+    console.error('載入系統總覽失敗', error)
+    summary.value = {
+      unread: 0,
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadDashboard)
 </script>
 
 <template>

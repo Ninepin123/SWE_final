@@ -322,6 +322,76 @@ function getSeedState() {
         content: '',
       },
     ],
+    announcements: [
+      {
+        id: 'ann-001',
+        title: '系統維護公告',
+        body: '本週五 22:00 至 23:00 將進行系統維護，期間可能短暫無法使用。',
+        isGlobal: true,
+        targetRole: null,
+        status: 'PUBLISHED',
+        createdBy: 'u-admin',
+        publishedAt: '2026-06-20T08:00:00+08:00',
+        expiresAt: null,
+        createdAt: '2026-06-20T08:00:00+08:00',
+        updatedAt: null,
+      },
+    ],
+    issues: [
+      {
+        id: 'issue-001',
+        issue_id: 'issue-001',
+        reporterId: 'u-student',
+        reporter_id: 'u-student',
+        issueType: 'BUG',
+        issue_type: 'BUG',
+        title: '無法上傳附件',
+        description: '我在申請頁面嘗試上傳附件時，畫面沒有反應。',
+        attachmentName: 'screenshot.png',
+        attachment_name: 'screenshot.png',
+        attachmentUrl: '',
+        attachment_url: '',
+        status: 'OPEN',
+        createdAt: '2026-06-20T09:00:00+08:00',
+        created_at: '2026-06-20T09:00:00+08:00',
+        updatedAt: null,
+        updated_at: null,
+      },
+    ],
+
+    issueReplies: [
+      {
+        id: 'reply-001',
+        replyId: 'reply-001',
+        reply_id: 'reply-001',
+        issueId: 'issue-001',
+        issue_id: 'issue-001',
+        replierId: 'u-admin',
+        replier_id: 'u-admin',
+        body: '已收到回報，我們會檢查附件上傳流程。',
+        createdAt: '2026-06-20T10:00:00+08:00',
+        created_at: '2026-06-20T10:00:00+08:00',
+      },
+    ],
+
+    systemAlerts: [
+      {
+        id: 'alert-001',
+        alertId: 'alert-001',
+        alert_id: 'alert-001',
+        severity: 'INFO',
+        title: '開發環境測試警示',
+        body: '這是一筆 NCS 系統警示測試資料。',
+        source: 'mock',
+        status: 'OPEN',
+        createdAt: '2026-06-20T08:30:00+08:00',
+        created_at: '2026-06-20T08:30:00+08:00',
+        resolvedAt: null,
+        resolved_at: null,
+      },
+    ],
+
+    applicationMessages: [],
     notifications: [
       {
         id: 'noti-001',
@@ -365,6 +435,7 @@ function getSeedState() {
 
 function normalizeState(state) {
   const seed = getSeedState()
+
   return {
     users: Array.isArray(state?.users) ? state.users : seed.users,
     profiles: state?.profiles ?? seed.profiles,
@@ -373,7 +444,30 @@ function normalizeState(state) {
     recommendations: Array.isArray(state?.recommendations)
       ? state.recommendations
       : seed.recommendations,
-    notifications: Array.isArray(state?.notifications) ? state.notifications : seed.notifications,
+
+    announcements: Array.isArray(state?.announcements)
+      ? state.announcements
+      : seed.announcements,
+
+    issues: Array.isArray(state?.issues)
+      ? state.issues
+      : seed.issues,
+
+    issueReplies: Array.isArray(state?.issueReplies)
+      ? state.issueReplies
+      : seed.issueReplies,
+
+    systemAlerts: Array.isArray(state?.systemAlerts)
+      ? state.systemAlerts
+      : seed.systemAlerts,
+
+    applicationMessages: Array.isArray(state?.applicationMessages)
+      ? state.applicationMessages
+      : seed.applicationMessages,
+
+    notifications: Array.isArray(state?.notifications)
+      ? state.notifications
+      : seed.notifications,
   }
 }
 
@@ -1357,22 +1451,91 @@ export async function sendRecommendationReminder(studentId, requestId) {
   return delay(request)
 }
 
-export async function listNotifications(userId) {
+export async function listNotifications(paramsOrUserId = {}) {
   const state = getState()
-  const items = state.notifications.filter((notification) => notification.userId === userId)
-  return delay(items)
+  let userId = localStorage.getItem(CURRENT_USER_KEY) || 'u-student'
+  let unreadOnly = false
+  let limit = 50
+  let offset = 0
+
+  if (typeof paramsOrUserId === 'string') {
+    userId = paramsOrUserId
+  } else if (paramsOrUserId && typeof paramsOrUserId === 'object') {
+    unreadOnly = Boolean(paramsOrUserId.unreadOnly)
+    limit = Number.isFinite(paramsOrUserId.limit) ? Math.max(1, Number(paramsOrUserId.limit)) : 50
+    offset = Number.isFinite(paramsOrUserId.offset) ? Math.max(0, Number(paramsOrUserId.offset)) : 0
+  }
+
+  let items = state.notifications.filter((notification) => notification.userId === userId)
+  if (unreadOnly) {
+    items = items.filter((notification) => !notification.read)
+  }
+  items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  return delay(items.slice(offset, offset + limit))
 }
 
-export async function markNotificationRead(userId, notificationId) {
+export async function getUnreadNotificationCount(userId) {
   const state = getState()
+  const currentUserId = userId || localStorage.getItem(CURRENT_USER_KEY) || 'u-student'
+  const unreadCount = state.notifications.filter((item) => item.userId === currentUserId && !item.read).length
+  return delay({ unread_count: unreadCount })
+}
+
+export async function markNotificationRead(userIdOrNotificationId, maybeNotificationId) {
+  const state = getState()
+  const currentUserId = localStorage.getItem(CURRENT_USER_KEY) || 'u-student'
+  const userId = maybeNotificationId ? userIdOrNotificationId : currentUserId
+  const notificationId = maybeNotificationId ?? userIdOrNotificationId
   const notification = state.notifications.find(
     (item) => item.id === notificationId && item.userId === userId,
   )
   if (notification) {
     notification.read = true
+    notification.readAt = todayIso()
   }
   saveState(state)
   return delay(notification ?? null)
+}
+
+export async function markAllNotificationsRead(userId) {
+  const state = getState()
+  const currentUserId = userId || localStorage.getItem(CURRENT_USER_KEY) || 'u-student'
+  let updatedCount = 0
+  for (const item of state.notifications) {
+    if (item.userId === currentUserId && !item.read) {
+      item.read = true
+      item.readAt = todayIso()
+      updatedCount += 1
+    }
+  }
+  saveState(state)
+  return delay({ updated_count: updatedCount })
+}
+
+export async function createNotification(payload) {
+  const state = getState()
+  const notification = {
+    id: createId('noti'),
+    userId: String(payload?.user_id ?? payload?.userId ?? ''),
+    title: payload?.title ?? '',
+    message: payload?.body ?? payload?.message ?? '',
+    body: payload?.body ?? payload?.message ?? '',
+    category: payload?.category ?? null,
+    read: false,
+    createdAt: todayIso(),
+  }
+  state.notifications.unshift(notification)
+  saveState(state)
+  return delay({
+    notification_id: notification.id,
+    user_id: notification.userId,
+    title: notification.title,
+    body: notification.body,
+    category: notification.category,
+    is_read: false,
+    created_at: notification.createdAt,
+    read_at: null,
+  })
 }
 
 export async function getDashboardSummary(user) {
@@ -1572,4 +1735,482 @@ export async function exportStatisticsCsvData(params) {
   })
 
   return delay(csv)
+}
+
+export async function listAnnouncements() {
+  const state = getState()
+  const currentUserId = localStorage.getItem(CURRENT_USER_KEY) || 'u-student'
+  const currentUser = getUserById(state, currentUserId)
+  const now = new Date()
+
+  const announcements = Array.isArray(state.announcements) ? state.announcements : []
+
+  const items = announcements.filter((item) => {
+    const published = item.status === 'PUBLISHED'
+    const notExpired = !item.expiresAt || new Date(item.expiresAt) >= now
+    const matchedTarget =
+      item.isGlobal ||
+      !item.targetRole ||
+      item.targetRole === currentUser?.role
+
+    return published && notExpired && matchedTarget
+  })
+
+  return delay(items)
+}
+
+export async function listAdminAnnouncements() {
+  const state = getState()
+  const announcements = Array.isArray(state.announcements) ? state.announcements : []
+
+  return delay(
+    [...announcements].sort(
+      (a, b) =>
+        new Date(b.createdAt ?? 0).getTime() -
+        new Date(a.createdAt ?? 0).getTime(),
+    ),
+  )
+}
+
+export async function createAnnouncement(payload) {
+  const state = getState()
+  const currentUserId = localStorage.getItem(CURRENT_USER_KEY) || 'u-admin'
+
+  if (!Array.isArray(state.announcements)) {
+    state.announcements = []
+  }
+
+  const announcement = {
+    id: createId('ann'),
+    title: payload.title ?? '',
+    body: payload.body ?? '',
+    isGlobal: payload.isGlobal ?? true,
+    targetRole: payload.isGlobal ? null : payload.targetRole,
+    status: payload.status ?? 'PUBLISHED',
+    createdBy: currentUserId,
+    publishedAt: payload.status === 'DRAFT' ? null : todayIso(),
+    expiresAt: payload.expiresAt ?? null,
+    createdAt: todayIso(),
+    updatedAt: todayIso(),
+  }
+
+  state.announcements.unshift(announcement)
+
+  if (payload.notifyUsers !== false && announcement.status === 'PUBLISHED') {
+    const targets = state.users.filter((user) => {
+      if (announcement.isGlobal) return user.status === 'ACTIVE'
+      return user.status === 'ACTIVE' && user.role === announcement.targetRole
+    })
+
+    targets.forEach((user) => {
+      pushNotification(state, {
+        userId: user.id,
+        type: 'info',
+        title: `公告：${announcement.title}`,
+        message: announcement.body,
+        category: 'ANNOUNCEMENT',
+        relatedType: 'ANNOUNCEMENT',
+        relatedId: announcement.id,
+      })
+    })
+  }
+
+  saveState(state)
+  return delay(announcement)
+}
+
+export async function updateAnnouncement(announcementId, payload) {
+  const state = getState()
+
+  if (!Array.isArray(state.announcements)) {
+    state.announcements = []
+  }
+
+  const index = state.announcements.findIndex((item) => item.id === announcementId)
+
+  if (index === -1) {
+    throw new Error('找不到公告')
+  }
+
+  state.announcements[index] = {
+    ...state.announcements[index],
+    title: payload.title ?? state.announcements[index].title,
+    body: payload.body ?? state.announcements[index].body,
+    isGlobal: payload.isGlobal ?? state.announcements[index].isGlobal,
+    targetRole: payload.isGlobal ? null : payload.targetRole,
+    status: payload.status ?? state.announcements[index].status,
+    expiresAt: payload.expiresAt ?? state.announcements[index].expiresAt,
+    updatedAt: todayIso(),
+  }
+
+  saveState(state)
+  return delay(state.announcements[index])
+}
+
+export async function deleteAnnouncement(announcementId) {
+  const state = getState()
+
+  if (!Array.isArray(state.announcements)) {
+    state.announcements = []
+  }
+
+  state.announcements = state.announcements.filter((item) => item.id !== announcementId)
+  saveState(state)
+  return delay(true)
+}
+
+export async function runDeadlineReminders() {
+  const state = getState()
+  let checkedCount = 0
+  let createdCount = 0
+  let skippedDuplicateCount = 0
+
+  const now = new Date()
+  const dueSoon = new Date(now.getTime() + 48 * 60 * 60 * 1000)
+
+  const recommendations = Array.isArray(state.recommendations) ? state.recommendations : []
+
+  for (const recommendation of recommendations) {
+    const application = state.applications.find((item) => item.id === recommendation.applicationId)
+    const scholarship = application
+      ? state.scholarships.find((item) => item.id === application.scholarshipId)
+      : null
+
+    if (!scholarship?.deadline || recommendation.status === 'SUBMITTED') continue
+
+    const deadline = new Date(`${scholarship.deadline}T23:59:59`)
+    if (deadline < now || deadline > dueSoon) continue
+
+    checkedCount += 1
+
+    const exists = state.notifications.some(
+      (item) =>
+        item.userId === recommendation.recommenderUserId &&
+        item.title === '推薦信即將截止' &&
+        item.relatedId === recommendation.id,
+    )
+
+    if (exists) {
+      skippedDuplicateCount += 1
+      continue
+    }
+
+    pushNotification(state, {
+      userId: recommendation.recommenderUserId,
+      type: 'warning',
+      title: '推薦信即將截止',
+      message: `「${scholarship.title}」推薦信即將截止，請盡快完成。`,
+      category: 'DEADLINE_REMINDER',
+      relatedType: 'RECOMMENDATION',
+      relatedId: recommendation.id,
+    })
+
+    createdCount += 1
+  }
+
+  saveState(state)
+
+  return delay({
+    checked_count: checkedCount,
+    created_count: createdCount,
+    skipped_duplicate_count: skippedDuplicateCount,
+  })
+}
+
+export async function listApplicationMessages(applicationId) {
+  const state = getState()
+  const messages = Array.isArray(state.applicationMessages) ? state.applicationMessages : []
+
+  return delay(messages.filter((item) => item.applicationId === applicationId || item.application_id === applicationId))
+}
+
+export async function createApplicationMessage(applicationId, body) {
+  const state = getState()
+  const currentUserId = localStorage.getItem(CURRENT_USER_KEY) || 'u-student'
+
+  if (!Array.isArray(state.applicationMessages)) {
+    state.applicationMessages = []
+  }
+
+  const messageId = createId('msg')
+
+  const message = {
+    id: messageId,
+    message_id: messageId,
+    applicationId,
+    application_id: applicationId,
+    senderId: currentUserId,
+    sender_id: currentUserId,
+    body,
+    createdAt: todayIso(),
+    created_at: todayIso(),
+  }
+
+  state.applicationMessages.push(message)
+
+  const application = state.applications.find((item) => item.id === applicationId)
+  if (application) {
+    const notifyUserId = currentUserId === application.studentId ? reviewerId : application.studentId
+
+    pushNotification(state, {
+      userId: notifyUserId,
+      type: 'info',
+      title: '案件有新留言',
+      message: `申請案 ${applicationId} 有新的留言。`,
+      category: 'MESSAGE',
+      relatedType: 'APPLICATION',
+      relatedId: applicationId,
+    })
+  }
+
+  saveState(state)
+  return delay(message)
+}
+
+export async function listAllIssues() {
+  const state = getState()
+  const issues = Array.isArray(state.issues) ? state.issues : []
+
+  return delay(
+    [...issues].sort(
+      (a, b) =>
+        new Date(b.createdAt ?? b.created_at ?? 0).getTime() -
+        new Date(a.createdAt ?? a.created_at ?? 0).getTime(),
+    ),
+  )
+}
+
+export async function listMyIssues() {
+  const state = getState()
+  const currentUserId = localStorage.getItem(CURRENT_USER_KEY) || 'u-student'
+  const issues = Array.isArray(state.issues) ? state.issues : []
+
+  return delay(
+    issues.filter((item) => {
+      const reporterId = item.reporterId ?? item.reporter_id
+      return reporterId === currentUserId
+    }),
+  )
+}
+
+export async function createIssueReport(payload) {
+  const state = getState()
+  const currentUserId = localStorage.getItem(CURRENT_USER_KEY) || 'u-student'
+
+  if (!Array.isArray(state.issues)) {
+    state.issues = []
+  }
+
+  const issueId = createId('issue')
+
+  const issue = {
+    id: issueId,
+    issue_id: issueId,
+    reporterId: currentUserId,
+    reporter_id: currentUserId,
+    issueType: payload.issueType ?? payload.issue_type ?? 'BUG',
+    issue_type: payload.issueType ?? payload.issue_type ?? 'BUG',
+    title: payload.title ?? '',
+    description: payload.description ?? '',
+    attachmentName: payload.attachmentName ?? payload.attachment_name ?? '',
+    attachment_name: payload.attachmentName ?? payload.attachment_name ?? '',
+    attachmentUrl: payload.attachmentUrl ?? payload.attachment_url ?? '',
+    attachment_url: payload.attachmentUrl ?? payload.attachment_url ?? '',
+    status: 'OPEN',
+    createdAt: todayIso(),
+    created_at: todayIso(),
+    updatedAt: null,
+    updated_at: null,
+  }
+
+  state.issues.unshift(issue)
+
+  const admins = state.users.filter((user) => user.role === 'ADMIN' && user.status === 'ACTIVE')
+  admins.forEach((admin) => {
+    pushNotification(state, {
+      userId: admin.id,
+      type: 'warning',
+      title: '新的問題回報',
+      message: `使用者送出問題回報：「${issue.title}」。`,
+      category: 'ISSUE',
+      relatedType: 'ISSUE',
+      relatedId: issueId,
+    })
+  })
+
+  saveState(state)
+  return delay(issue)
+}
+
+export async function updateIssueReport(issueId, payload) {
+  const state = getState()
+
+  if (!Array.isArray(state.issues)) {
+    state.issues = []
+  }
+
+  const index = state.issues.findIndex((item) => {
+    const id = item.id ?? item.issueId ?? item.issue_id
+    return id === issueId
+  })
+
+  if (index === -1) {
+    throw new Error('找不到問題回報')
+  }
+
+  state.issues[index] = {
+    ...state.issues[index],
+    status: payload.status ?? state.issues[index].status,
+    updatedAt: todayIso(),
+    updated_at: todayIso(),
+  }
+
+  saveState(state)
+  return delay(state.issues[index])
+}
+
+export async function listIssueReplies(issueId) {
+  const state = getState()
+  const replies = Array.isArray(state.issueReplies) ? state.issueReplies : []
+
+  return delay(
+    replies.filter((item) => {
+      const id = item.issueId ?? item.issue_id
+      return id === issueId
+    }),
+  )
+}
+
+export async function createIssueReply(issueId, body) {
+  const state = getState()
+  const currentUserId = localStorage.getItem(CURRENT_USER_KEY) || 'u-admin'
+
+  if (!Array.isArray(state.issueReplies)) {
+    state.issueReplies = []
+  }
+
+  const issue = (Array.isArray(state.issues) ? state.issues : []).find((item) => {
+    const id = item.id ?? item.issueId ?? item.issue_id
+    return id === issueId
+  })
+
+  if (!issue) {
+    throw new Error('找不到問題回報')
+  }
+
+  const replyId = createId('reply')
+
+  const reply = {
+    id: replyId,
+    replyId,
+    reply_id: replyId,
+    issueId,
+    issue_id: issueId,
+    replierId: currentUserId,
+    replier_id: currentUserId,
+    body,
+    createdAt: todayIso(),
+    created_at: todayIso(),
+  }
+
+  state.issueReplies.push(reply)
+
+  const reporterId = issue.reporterId ?? issue.reporter_id
+  pushNotification(state, {
+    userId: reporterId,
+    type: 'info',
+    title: '問題回報有新回覆',
+    message: `你的問題「${issue.title}」已有管理員回覆。`,
+    category: 'ISSUE',
+    relatedType: 'ISSUE',
+    relatedId: issueId,
+  })
+
+  saveState(state)
+  return delay(reply)
+}
+
+export async function listSystemAlerts() {
+  const state = getState()
+  const alerts = Array.isArray(state.systemAlerts) ? state.systemAlerts : []
+
+  return delay(
+    [...alerts].sort(
+      (a, b) =>
+        new Date(b.createdAt ?? b.created_at ?? 0).getTime() -
+        new Date(a.createdAt ?? a.created_at ?? 0).getTime(),
+    ),
+  )
+}
+
+export async function createSystemAlert(payload) {
+  const state = getState()
+
+  if (!Array.isArray(state.systemAlerts)) {
+    state.systemAlerts = []
+  }
+
+  const alertId = createId('alert')
+
+  const alert = {
+    id: alertId,
+    alertId,
+    alert_id: alertId,
+    severity: payload.severity ?? 'INFO',
+    title: payload.title ?? '',
+    body: payload.body ?? '',
+    source: payload.source ?? 'manual',
+    status: 'OPEN',
+    createdAt: todayIso(),
+    created_at: todayIso(),
+    resolvedAt: null,
+    resolved_at: null,
+  }
+
+  state.systemAlerts.unshift(alert)
+
+  const admins = state.users.filter((user) => user.role === 'ADMIN' && user.status === 'ACTIVE')
+  admins.forEach((admin) => {
+    pushNotification(state, {
+      userId: admin.id,
+      type: ['ERROR', 'CRITICAL'].includes(alert.severity) ? 'danger' : 'warning',
+      title: `系統警示：${alert.title}`,
+      message: alert.body,
+      category: 'SYSTEM_ALERT',
+      relatedType: 'SYSTEM_ALERT',
+      relatedId: alertId,
+    })
+  })
+
+  saveState(state)
+  return delay(alert)
+}
+
+export async function updateSystemAlert(alertId, payload) {
+  const state = getState()
+
+  if (!Array.isArray(state.systemAlerts)) {
+    state.systemAlerts = []
+  }
+
+  const index = state.systemAlerts.findIndex((item) => {
+    const id = item.id ?? item.alertId ?? item.alert_id
+    return id === alertId
+  })
+
+  if (index === -1) {
+    throw new Error('找不到系統警示')
+  }
+
+  const nextStatus = payload.status ?? state.systemAlerts[index].status
+
+  state.systemAlerts[index] = {
+    ...state.systemAlerts[index],
+    status: nextStatus,
+    resolvedAt: nextStatus === 'RESOLVED' ? todayIso() : state.systemAlerts[index].resolvedAt,
+    resolved_at: nextStatus === 'RESOLVED' ? todayIso() : state.systemAlerts[index].resolved_at,
+  }
+
+  saveState(state)
+  return delay(state.systemAlerts[index])
 }
