@@ -80,6 +80,17 @@ function getSeedState() {
         createdAt: '2026-06-01T08:20:00+08:00',
       },
       {
+        id: 'u-sponsor',
+        account: 'sponsor',
+        name: '獎助單位人員',
+        email: 'sponsor@nuk.edu.tw',
+        role: 'SPONSOR',
+        unit: '學生事務處',
+        status: 'ACTIVE',
+        phone: '07-5919000#1300',
+        createdAt: '2026-06-01T08:25:00+08:00',
+      },
+      {
         id: 'u-recommender',
         account: 'teacher',
         name: '陳明哲',
@@ -1509,6 +1520,17 @@ export async function getDashboardSummary(user) {
       users: state.users.length,
       scholarships: state.scholarships.length,
       openScholarships: state.scholarships.filter((item) => item.status === 'OPEN').length,
+      unread,
+    })
+  }
+  if (user.role === 'SPONSOR') {
+    const ownScholarships = state.scholarships.filter((item) => item.sponsor === user.unit)
+
+    return delay({
+      scholarships: ownScholarships.length || state.scholarships.length,
+      openScholarships: (ownScholarships.length ? ownScholarships : state.scholarships).filter(
+        (item) => item.status === 'OPEN',
+      ).length,
       unread,
     })
   }

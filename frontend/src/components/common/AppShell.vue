@@ -158,9 +158,14 @@ async function switchRole(event) {
     return
   }
 
-  await auth.loginAs(event.target.value)
-  toast.info(`已切換為${auth.roleLabel}`)
-  router.push('/dashboard')
+  try {
+    await auth.loginAs(event.target.value)
+    toast.info(`已切換為${auth.roleLabel}`)
+    router.push('/dashboard')
+  } catch (error) {
+    console.error('切換角色失敗', error)
+    toast.error(error?.message || '切換角色失敗，請確認 mockBackend 是否有此角色帳號。')
+  }
 }
 
 async function logout() {
