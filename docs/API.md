@@ -19,14 +19,30 @@
 
 ### POST /api/aas/login
 - 公開（不需 token）。
-- Request：`{ "account": "A1125529", "password": "password123" }`
-- Response：`{ "access_token": "<JWT>", "token_type": "bearer", "user": { "user_id": 5, "account": "A1125529", "name": "黃文傑", "role": "STUDENT", "email": "...", "unit_id": null, "department": "資訊工程學系" } }`
+- Request：`{ "account": "<正式帳號>", "password": "<密碼>" }`
+- Response：`{ "access_token": "<JWT>", "token_type": "bearer", "user": { "user_id": 5, "account": "<正式帳號>", "name": "<使用者姓名>", "role": "STUDENT", "email": "...", "unit_id": null, "department": "資訊工程學系" } }`
+- 初始資料庫若沒有任何 `ADMIN`，啟動腳本會建立 bootstrap 管理員；預設帳號為 `admin`，密碼由 `BOOTSTRAP_ADMIN_PASSWORD` 設定控制。
 
 ### POST /api/aas/logout
 - 需登入。JWT 無狀態，前端清除 token 即登出。Response：`{ "detail": "已登出" }`
 
 ### GET /api/aas/me
 - 需登入。Response：同上 `user` 物件（`UserOut`）。
+
+### GET /api/aas/units  （需登入）
+- 任何登入者皆可讀，供帳號與獎學金的單位下拉使用。`keyword` 可模糊搜尋名稱／Email。
+- Response：`UnitOut[]`，其中 `UnitOut = { unit_id, name, type, contact_email, created_at }`
+- `type`：`SCHOOL/GOVERNMENT/PRIVATE/OTHER`
+
+### POST /api/aas/units  （僅 ADMIN）
+- Request：`{ "name", "type?", "contact_email?" }`（`name` 唯一）
+- Response：`UnitOut`（201）；名稱重複回 409。
+
+### PUT /api/aas/units/{unit_id}  （僅 ADMIN）
+- Request：`UnitUpdate`（只送要改的欄位）。Response：`UnitOut`
+
+### DELETE /api/aas/units/{unit_id}  （僅 ADMIN）
+- 若仍有帳號或獎學金綁定此單位回 409；需先改綁或刪除相依資料。Response：`{ "detail": "已刪除單位" }`
 
 ### GET /api/aas/users  （僅 ADMIN）
 - Response：`UserOut[]`
@@ -49,9 +65,9 @@
 - Response：`ScholarshipOut`
 
 ### POST /api/sms/scholarships  （僅 SPONSOR / ADMIN）
-- 以登入者的 `unit_id` 作為提供單位。
-- Request：`{ "name", "year", "amount", "quota", "min_gpa?", "department_limit?", "category?", "description?", "deadline?" }`
-- Response：`ScholarshipOut`（201）
+- 提供單位：`unit_id` 可指定；ADMIN 可選任一單位，SPONSOR 僅限自己所屬單位，未指定則沿用登入者的 `unit_id`（皆未綁定則回 400）。
+- Request：`{ "title", "unitId?", "year", "amount", "quota", "category?", "description?", "startDate?", "deadline?", "criteria?", "tags?", "requiredDocs?", "requireRecommendation?", "contact*?" }`
+- Response：`ScholarshipOut`（201）。`ScholarshipOut.sponsor` 為所屬單位名稱。
 
 ---
 
@@ -175,6 +191,7 @@
 > 並實作 TRS 推薦信與 NCS 通知/公告，審查改為僅 REVIEWER 並會留下紀錄。
 
 ## AAS（變更/新增）
+- **單位管理**（`/api/aas/units`，GET 任何登入者、寫入/刪除僅 ADMIN）：單位 CRUD，供帳號與獎學金綁定。刪除前需先解除帳號／獎學金的相依。
 - **GET /api/aas/teachers**（任何登入者）：老師清單 `TeacherOut[] = { user_id, name, department }`，給學生邀請推薦用。
 - **PUT /api/aas/users/{id}**（僅 ADMIN）：修改帳號。Request 為 `UserUpdate`（只送要改的欄位；`password` 留空表示不改）。
 - **DELETE /api/aas/users/{id}**（僅 ADMIN）：刪除帳號；若已有關聯資料回 409（建議改為停用 `status=DISABLED`）。
@@ -182,6 +199,7 @@
 - `UserOut` 增加 `email, unit_id, department, gpa, status`。
 
 ## SMS（新增）
+- **建立／修改獎學金可指定提供單位** `unitId`：ADMIN 可選任一單位（解決管理員無 `unit_id` 無法建立的問題），SPONSOR 僅限自己單位；變更既有獎學金的單位僅限 ADMIN。
 - **PUT /api/sms/scholarships/{id}**（SPONSOR/ADMIN）：修改獎學金（含 `status` OPEN/CLOSED）。獎助單位僅能改自己單位的。
 - **DELETE /api/sms/scholarships/{id}**（SPONSOR/ADMIN）：刪除；若已有申請回 409（可改為將狀態設為 CLOSED）。
 
@@ -211,3 +229,9 @@
 - **POST /api/ncs/notifications/{id}/read**（登入者）：標記已讀。
 - **GET /api/ncs/announcements**（登入者）：公告列表。
 - **POST /api/ncs/announcements**（僅 ADMIN）：發布公告 `{ title, body }`。
+- **POST /api/ncs/issues**（登入者）：建立問題回報 `{ issue_type, title, description, attachment_name?, attachment_url? }`。
+- **GET /api/ncs/issues/me**（登入者）：查看自己建立的問題回報。
+- **GET /api/ncs/issues**（僅 ADMIN）：查看全部問題回報。
+- **PATCH /api/ncs/issues/{id}**（僅 ADMIN）：更新問題狀態 `{ status }`。
+- **GET /api/ncs/issues/{id}/replies**（ADMIN 或回報本人）：查看問題回報討論紀錄。
+- **POST /api/ncs/issues/{id}/replies**（ADMIN 或回報本人）：新增討論回覆 `{ body }`，系統會通知另一方。

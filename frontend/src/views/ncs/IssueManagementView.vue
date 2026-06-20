@@ -9,7 +9,9 @@ import {
   listIssueReplies,
   updateIssueReport,
 } from '@/api/ncs'
+import { useAuthStore } from '@/stores/auth'
 
+const auth = useAuthStore()
 const loading = ref(true)
 const updatingId = ref(null)
 const error = ref('')
@@ -19,6 +21,7 @@ const selectedIssue = ref(null)
 const replies = ref([])
 const replyBody = ref('')
 const replyLoading = ref(false)
+const replySubmitting = ref(false)
 
 const statusOptions = [
   { label: '待處理', value: 'OPEN' },
@@ -48,6 +51,8 @@ const sortedIssues = computed(() => {
   })
 })
 
+const currentUserId = computed(() => auth.user?.user_id ?? auth.user?.id ?? null)
+
 function issueIdOf(issue) {
   return issue.issue_id ?? issue.issueId ?? issue.id
 }
@@ -58,6 +63,22 @@ function statusOf(issue) {
 
 function reporterIdOf(issue) {
   return issue.reporter_id ?? issue.reporterId ?? '-'
+}
+
+function replierIdOf(reply) {
+  return reply.replier_id ?? reply.replierId ?? null
+}
+
+function isReporterReply(reply) {
+  return replierIdOf(reply) === reporterIdOf(selectedIssue.value)
+}
+
+function replyAuthorLabel(reply) {
+  const replierId = replierIdOf(reply)
+
+  if (isReporterReply(reply)) return `使用者回覆 ID：${replierId ?? '-'}`
+  if (replierId === currentUserId.value) return '我的管理員回覆'
+  return `管理員回覆 ID：${replierId ?? '-'}`
 }
 
 function formatDate(value) {
@@ -165,7 +186,7 @@ async function submitReply() {
 
   error.value = ''
   success.value = ''
-  replyLoading.value = true
+  replySubmitting.value = true
 
   try {
     const reply = await createIssueReply(issueId, replyBody.value.trim())
@@ -173,13 +194,25 @@ async function submitReply() {
     replyBody.value = ''
     success.value = '回覆已送出'
 
+    const updatedAt = reply?.created_at ?? reply?.createdAt ?? new Date().toISOString()
+    selectedIssue.value = {
+      ...selectedIssue.value,
+      updated_at: updatedAt,
+      updatedAt,
+    }
+    issues.value = issues.value.map((issue) => (
+      issueIdOf(issue) === issueId
+        ? { ...issue, updated_at: updatedAt, updatedAt }
+        : issue
+    ))
+
     if (statusOf(selectedIssue.value) === 'OPEN') {
       await changeStatus(selectedIssue.value, 'IN_PROGRESS')
     }
   } catch (err) {
     error.value = resolveErrorMessage(err, '回覆送出失敗')
   } finally {
-    replyLoading.value = false
+    replySubmitting.value = false
   }
 }
 
@@ -211,7 +244,7 @@ onMounted(loadIssues)
       description="使用者送出問題回報後，會出現在這裡。"
     />
 
-    <section v-else class="issue-layout">
+    <section v-else class="issue-layout" :class="{ 'issue-layout--with-panel': selectedIssue }">
       <div class="issue-list">
         <BaseCard
           v-for="issue in sortedIssues"
@@ -263,7 +296,7 @@ onMounted(loadIssues)
         </BaseCard>
       </div>
 
-      <BaseCard v-if="selectedIssue" class="reply-panel" title="回覆紀錄">
+      <BaseCard v-if="selectedIssue" class="reply-panel" title="討論紀錄">
         <div class="reply-panel__issue">
           <strong>{{ selectedIssue.title }}</strong>
           <p>{{ selectedIssue.description }}</p>
@@ -272,13 +305,18 @@ onMounted(loadIssues)
         <LoadingSkeleton v-if="replyLoading" :rows="3" />
 
         <div v-else-if="replies.length === 0" class="reply-empty">
-          尚無回覆紀錄。
+          尚無討論紀錄。
         </div>
 
         <div v-else class="reply-list">
-          <div v-for="reply in replies" :key="reply.reply_id ?? reply.replyId" class="reply-item">
+          <div
+            v-for="reply in replies"
+            :key="reply.reply_id ?? reply.replyId"
+            class="reply-item"
+            :class="{ 'reply-item--reporter': isReporterReply(reply) }"
+          >
             <div class="reply-item__header">
-              <strong>回覆者 ID：{{ reply.replier_id ?? reply.replierId }}</strong>
+              <strong>{{ replyAuthorLabel(reply) }}</strong>
               <span>{{ formatDate(reply.created_at ?? reply.createdAt) }}</span>
             </div>
             <p>{{ reply.body }}</p>
@@ -288,11 +326,11 @@ onMounted(loadIssues)
         <form class="reply-form" @submit.prevent="submitReply">
           <label>
             管理員回覆
-            <textarea v-model="replyBody" rows="4" placeholder="請輸入回覆內容"></textarea>
+            <textarea v-model="replyBody" rows="4" placeholder="請輸入回覆內容，送出後使用者會收到通知"></textarea>
           </label>
 
-          <button class="primary-button" type="submit" :disabled="replyLoading">
-            {{ replyLoading ? '送出中...' : '送出回覆' }}
+          <button class="primary-button" type="submit" :disabled="replyLoading || replySubmitting">
+            {{ replySubmitting ? '送出中...' : '送出回覆' }}
           </button>
         </form>
       </BaseCard>
@@ -303,9 +341,13 @@ onMounted(loadIssues)
 <style scoped>
 .issue-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  grid-template-columns: 1fr;
   gap: 1rem;
   align-items: start;
+}
+
+.issue-layout--with-panel {
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
 }
 
 .issue-list {
@@ -384,6 +426,11 @@ onMounted(loadIssues)
   border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 0.75rem;
   padding: 0.75rem;
+}
+
+.reply-item--reporter {
+  background: #f0fdf4;
+  border-color: #86efac;
 }
 
 .reply-item__header {

@@ -92,8 +92,8 @@ onMounted(async () => {
 <template>
   <LoadingSkeleton v-if="loading" :rows="5" />
 
-  <div v-else class="page-grid">
-    <BaseCard title="我的個人資料" eyebrow="Profile">
+  <div v-else class="profile-page page-grid">
+    <BaseCard class="profile-card" title="我的個人資料" eyebrow="Profile">
       <p class="muted-text">
         學號、姓名、科系、年級、GPA 與身份類別為核心資料，需由管理單位更正。
       </p>
@@ -162,7 +162,7 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="form-actions">
+      <div class="form-actions profile-actions">
         <button class="primary-button" type="button" :disabled="saving" @click="save">
           {{ saving ? '儲存中' : '儲存變更' }}
         </button>
@@ -170,3 +170,48 @@ onMounted(async () => {
     </BaseCard>
   </div>
 </template>
+
+<style scoped>
+.profile-page,
+.profile-card {
+  width: 100%;
+}
+
+.profile-page .muted-text {
+  max-width: 920px;
+}
+
+.profile-page .form-grid {
+  gap: 18px 20px;
+}
+
+.profile-page .profile-actions {
+  position: static;
+  bottom: auto;
+  z-index: auto;
+  margin-top: 24px;
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+@media (min-width: 1180px) {
+  .profile-card {
+    padding-inline: clamp(24px, 2.2vw, 40px);
+  }
+}
+
+@media (max-width: 760px) {
+  .profile-page .profile-actions {
+    justify-content: stretch;
+  }
+
+  .profile-page .profile-actions .primary-button {
+    width: 100%;
+  }
+}
+</style>

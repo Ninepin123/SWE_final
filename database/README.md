@@ -13,12 +13,14 @@
 | `schema/04_trs_tables.sql` | TRS：推薦邀請、推薦信 |
 | `schema/05_ras_tables.sql` | RAS：審查紀錄、核發名單 |
 | `schema/06_ncs_tables.sql` | NCS：通知、公告、留言、問題回報 |
-| `seed/99_dev_seed.sql` | 開發用測試資料（依子系統分區塊） |
 
 ## 本機初始化
 
 **直接雙擊專案根目錄的 `start.bat` 即可**——它會自動下載可攜版 MySQL（免安裝）、
 自動建庫並依編號執行所有腳本，全程不需輸入密碼。
+建好 schema 後，`start.bat` 會額外執行 AAS bootstrap，只在沒有任何 `ADMIN`
+帳號時建立必要的預設管理員；這不是 demo/mock 資料，也不會建立學生、教師、
+獎學金或通知內容。
 
 手動執行（備用）：
 
@@ -30,7 +32,6 @@ mysql -u root -p nuksams < schema/03_sas_tables.sql
 mysql -u root -p nuksams < schema/04_trs_tables.sql
 mysql -u root -p nuksams < schema/05_ras_tables.sql
 mysql -u root -p nuksams < schema/06_ncs_tables.sql
-mysql -u root -p nuksams < seed/99_dev_seed.sql
 ```
 
 （編號即執行順序，後面的檔案可以 FOREIGN KEY 參照前面檔案建立的資料表。）
@@ -39,6 +40,6 @@ mysql -u root -p nuksams < seed/99_dev_seed.sql
 
 1. **一個子系統一個檔**：只能修改自己負責的 `0X_*.sql`。
 2. 需要動到**別人的資料表**（例如想在 `users` 加欄位）→ 在群組提出，由該檔負責人修改。
-3. 所有 SQL 都必須**可重複執行**（schema 用 `CREATE TABLE IF NOT EXISTS`、seed 用 `INSERT IGNORE`），因為 `start.bat` 每次啟動都會重跑全部腳本，確保大家的本機資料庫自動保持最新。
+3. 所有 schema SQL 都必須**可重複執行**（例如 `CREATE TABLE IF NOT EXISTS`），因為 `start.bat` 每次啟動都會重跑全部 schema 腳本，確保大家的本機資料庫自動保持最新；本專案不再提供或自動執行開發假資料 seed，但會保留必要的 bootstrap 管理員。
 4. 改了 schema 請在 PR 描述註明「需要重跑 database 腳本」，並通知群組。
 5. 資料表命名：小寫複數 + 底線，例如 `users`、`scholarship_criteria`。

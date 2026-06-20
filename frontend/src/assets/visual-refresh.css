@@ -64,17 +64,6 @@ body {
   color: #fff;
 }
 
-.sidebar__dev-note {
-  margin-top: auto;
-  padding: 10px 12px;
-  border: 1px dashed rgba(184, 70, 53, 0.35);
-  border-radius: var(--radius-md);
-  background: rgba(184, 70, 53, 0.06);
-  color: var(--seal);
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .workspace {
   min-width: 0;
 }
@@ -90,9 +79,13 @@ body {
 }
 
 .page-shell {
-  max-width: 1280px;
+  max-width: var(--content-max);
   margin: 0 auto;
-  padding: 30px 34px 54px;
+  padding: 30px 48px 54px;
+}
+
+.page-shell--wide {
+  max-width: var(--content-max-wide);
 }
 
 .card {
@@ -219,64 +212,66 @@ textarea:focus {
   line-height: 1.7;
 }
 
-.dashboard-hero__actions {
-  z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
 .stat-grid--modern {
-  gap: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
 }
 
 .stat-card--modern {
   position: relative;
   overflow: hidden;
   min-height: 140px;
-  padding: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
 }
 
 .stat-card--modern::before {
   content: "";
   position: absolute;
   inset: 0 auto 0 0;
-  width: 5px;
+  width: 6px;
   background: var(--primary);
 }
 
 .stat-card__top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-start;
+  gap: 14px;
 }
 
 .stat-card__icon {
   display: grid;
-  width: 42px;
-  height: 42px;
+  width: 46px;
+  height: 46px;
   place-items: center;
   border-radius: 14px;
   background: var(--primary-soft);
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .stat-card__label {
-  color: var(--muted);
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .stat-card--modern strong {
-  margin-top: 10px;
-  font-size: 42px;
+  display: block;
+  margin-top: 18px;
+  font-size: 44px;
+  line-height: 1;
   color: var(--text);
+  font-weight: 700;
 }
 
 .stat-card--modern p {
+  margin-top: 6px;
   color: var(--muted);
   font-size: 13px;
+  font-weight: 500;
 }
 
 .stat-card--warning::before { background: #c47a26; }
@@ -375,11 +370,40 @@ textarea:focus {
   filter: grayscale(0.12);
 }
 
+/* 有未完成草稿的卡片：以赭金邊框點出「待你繼續填」，不灰階淡化 */
+.scholarship-card--draft {
+  border-color: rgba(138, 106, 44, 0.5);
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+
 .scholarship-card__head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
+}
+
+.scholarship-card__head-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 「草稿尚未完成」標記：赭金＝待處理／提醒，呼應補件提示色 */
+.draft-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: var(--gold);
+  background: var(--gold-soft);
+  border: 1px solid rgba(138, 106, 44, 0.32);
 }
 
 .scholarship-card__head h2 {
@@ -530,6 +554,10 @@ textarea:focus {
 }
 
 @media (max-width: 1080px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
   .dashboard-hero,
   .listing-hero,
   .application-hero,

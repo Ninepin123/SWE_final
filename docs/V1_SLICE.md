@@ -1,6 +1,6 @@
 # NUKSAMS v1 初版（核心流程）說明
 
-這份 v1 把系統最核心的一條流程打通成可實際操作的版本，給團隊一個能跑、能 demo 的基礎，
+這份 v1 把系統最核心的一條流程打通成可實際操作的版本，給團隊一個能跑的基礎，
 其餘子系統與細項功能在這條主軸上往外長即可。
 
 ## 這版做了什麼（端到端流程）
@@ -30,37 +30,25 @@
 
 1. 裝好 **Node.js 20+ / Python 3.10+**（MySQL 不用裝）。
 2. **雙擊 `start.bat`**：會自動裝套件、建資料庫與資料表、開前後端、開瀏覽器。
-3. **第一次**請建立示範帳號與資料（資料表建立後執行一次即可）：
-   在 `backend/` 目錄、venv 啟用後執行——
-   - Windows：`.venv\Scripts\python -m app.modules.aas.dev_seed`
-   - macOS/Linux：`python -m app.modules.aas.dev_seed`
-4. 瀏覽器開 <http://localhost:5173>，用下列示範帳號登入（密碼皆為 `password123`）。
+3. 瀏覽器開 <http://localhost:5173>，使用正式建立的帳號登入。
 
 > 後端 API 文件：<http://localhost:8000/docs>
 
-### 示範帳號
+### 帳號來源
 
-| 帳號 | 角色 | 用途 |
-|------|------|------|
-| `admin` | 管理員 | 帳號管理 |
-| `sponsor` | 獎助單位 | 新增/管理獎學金 |
-| `reviewer` | 審查人員 | 審查申請案 |
-| `teacher` | 老師 | （TRS 尚未實作） |
-| `A1125529` | 學生（GPA 3.85）| 申請、查看進度 |
-| `A1125599` | 學生（GPA 3.20）| 申請、查看進度 |
+系統不再提供種子帳號或假資料，但會在沒有任何 `ADMIN` 時建立必要的 bootstrap 管理員。預設帳號為 `admin`，密碼由 `BOOTSTRAP_ADMIN_PASSWORD` 設定控制。其餘使用者、單位與獎學金資料請由正式管理流程建立。
 
-## 三分鐘 Demo 腳本
+## 流程驗證腳本
 
-1. 用 `sponsor` 登入 → 獎學金管理 → 新增一筆獎學金（設個最低 GPA，例如 3.5）。
-2. 用 `A1125529`（GPA 3.85）登入 → 申請獎學金 → 送出 → 我的申請進度顯示「審核中」。
-3.（可選）用 `A1125599`（GPA 3.20）登入申請同一筆，會被擋下（GPA 未達門檻）。
-4. 用 `reviewer` 登入 → 審查申請案（依 GPA 排序）→ 對 A1125529 按「通過」。
-5. 回到 `A1125529` 的「我的申請進度」→ 狀態變成「已通過」。
+1. 用正式獎助單位帳號登入 → 獎學金管理 → 新增一筆獎學金。
+2. 用正式學生帳號登入 → 申請獎學金 → 送出 → 我的申請進度顯示「審核中」。
+3. 用正式審查人員帳號登入 → 審查申請案 → 做出審查決定。
+4. 回到學生帳號的「我的申請進度」確認結果。
 
 ## 這版改了哪些檔案
 
 - 後端：`backend/app/modules/{aas,sms,sas,ras}/` 的 `models/schemas/service/router.py`，
-  新增 `aas/security.py`（JWT/權限）與 `aas/dev_seed.py`（示範資料）。
+  新增 `aas/security.py`（JWT/權限）。
 - 資料庫：`database/schema/{01_aas,02_sms,03_sas,05_ras}_tables.sql` 補上實際資料表。
 - 前端：`stores/auth.js`、`api/{aas,sms,sas,ras}.js`、`router/modules/{aas,sms,sas,ras}.js`、
   `views/{aas,sms,sas,ras}/*.vue`、`views/common/HomeView.vue`。

@@ -35,7 +35,7 @@ SWE_final/
 │   └── app/
 │       ├── core/              # 設定、DB 連線（共用，組長維護）
 │       └── modules/<子系統>/   # router / service / models / schemas
-├── database/                  # MySQL 腳本（schema 依子系統分檔 + seed）
+├── database/                  # MySQL 腳本（schema 依子系統分檔）
 ├── docs/                      # 開發說明與 API 契約
 └── requirement.md             # 需求規格書
 ```

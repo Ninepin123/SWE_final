@@ -3,8 +3,6 @@
 // 不要在元件裡直接呼叫 axios / fetch。
 import axios from 'axios'
 
-export const useMockApi = import.meta.env.VITE_USE_MOCK_API !== 'false'
-
 const http = axios.create({
   baseURL: '/api', // 開發時由 vite.config.js 的 proxy 轉發到後端
   timeout: 15000,
@@ -31,20 +29,9 @@ http.interceptors.response.use(
   },
 )
 
-export async function withApiFallback(request, fallback) {
-  if (useMockApi) {
-    return fallback()
-  }
-  try {
-    const response = await request()
-    return response.data
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.warn('API 尚未完成，改用前端 mock 資料。', error)
-      return fallback()
-    }
-    throw error
-  }
+export async function withApiData(request) {
+  const response = await request()
+  return response.data
 }
 
 export default http

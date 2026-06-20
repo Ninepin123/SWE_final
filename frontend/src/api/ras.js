@@ -1,9 +1,7 @@
 // RAS 審查與核發 — API 呼叫（負責人：填上姓名）
 // 對應後端 backend/app/modules/ras/router.py，路徑前綴 /api/ras
-import http, { withApiFallback } from './http'
-import * as mock from '@/services/mockBackend'
+import http, { withApiData } from './http'
 
-// 範例（骨架測試用，開發開始後可移除）：
 export function ping() {
   return http.get('/ras/ping')
 }
@@ -78,44 +76,35 @@ function normalizeReviewApplication(item = {}) {
 }
 
 export function listReviewApplications(params) {
-  return withApiFallback(() => http.get('/ras/applications', { params }), () =>
-    mock.listReviewApplications(params),
-  ).then((items) => (Array.isArray(items) ? items.map(normalizeReviewApplication) : []))
+  return withApiData(() => http.get('/ras/applications', { params }))
+    .then((items) => (Array.isArray(items) ? items.map(normalizeReviewApplication) : []))
 }
 
 export function submitReviewDecision(reviewerId, applicationId, decision) {
-  return withApiFallback(
-    () => http.post(`/ras/applications/${applicationId}/decision`, decision),
-    () => mock.submitReviewDecision(reviewerId, applicationId, decision),
-  )
+  return withApiData(() => http.post(`/ras/applications/${applicationId}/decision`, decision))
 }
 
 export function requestSupplement(reviewerId, applicationId, comment, deadline) {
-  return withApiFallback(
-    () => http.post(`/ras/applications/${applicationId}/decision`, { result: 'NEED_SUPPLEMENT', comment, supplement_deadline: deadline }),
-    () => mock.submitReviewDecision(reviewerId, applicationId, { result: 'NEED_SUPPLEMENT', comment, supplement_deadline: deadline }),
+  return withApiData(
+    () =>
+      http.post(`/ras/applications/${applicationId}/decision`, {
+        result: 'NEED_SUPPLEMENT',
+        comment,
+        supplement_deadline: deadline,
+      }),
   )
 }
 
 export function logView(applicationId) {
-  return withApiFallback(
-    () => http.post(`/ras/applications/${applicationId}/view`),
-    () => Promise.resolve({ detail: '已記錄查看操作' })
-  )
+  return withApiData(() => http.post(`/ras/applications/${applicationId}/view`))
 }
 
 export function getAwardList(params) {
-  return withApiFallback(
-    () => http.get('/ras/award-list', { params }),
-    () => mock.getAwardList(params)
-  )
+  return withApiData(() => http.get('/ras/award-list', { params }))
 }
 
 export function getStatistics(params) {
-  return withApiFallback(
-    () => http.get('/ras/statistics', { params }),
-    () => mock.getStatistics(params)
-  )
+  return withApiData(() => http.get('/ras/statistics', { params }))
 }
 
 export function exportStatisticsCsv(params) {
@@ -125,20 +114,6 @@ export function exportStatisticsCsv(params) {
       const link = document.createElement('a')
       link.href = url
       link.setAttribute('download', params?.year ? `statistics_${params.year}.csv` : 'statistics_all.csv')
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      window.URL.revokeObjectURL(url)
-    })
-    .catch(async () => {
-      // fallback mock download
-      const csvContent = await mock.exportStatisticsCsvData(params)
-      // 加入 BOM 讓 Excel 可以正確顯示中文
-      const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' })
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', params?.year ? `mock_statistics_${params.year}.csv` : 'mock_statistics_all.csv')
       document.body.appendChild(link)
       link.click()
       link.remove()

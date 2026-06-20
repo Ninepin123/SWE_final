@@ -5,7 +5,7 @@ import BaseCard from '@/components/common/BaseCard.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
-import { listAvailableScholarships } from '@/api/sas'
+import { listAvailableScholarships, listMyApplications } from '@/api/sas'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -14,6 +14,7 @@ const keyword = ref('')
 const categoryFilter = ref('')
 const eligibilityFilter = ref('')
 const scholarships = ref([])
+const draftScholarshipIds = ref(new Set())
 
 const filteredScholarships = computed(() => {
   const query = keyword.value.trim().toLowerCase()
@@ -29,7 +30,13 @@ const filteredScholarships = computed(() => {
 })
 
 const openCount = computed(() => scholarships.value.filter((item) => item.status === 'OPEN').length)
-const eligibleCount = computed(() => scholarships.value.filter((item) => item.canApply && !isUnavailable(item)).length)
+// 「符合資格」＝可全新申請的項目 ＋ 尚未填完、仍可繼續填的草稿。
+const eligibleCount = computed(
+  () =>
+    scholarships.value.filter(
+      (item) => continuable(item) || (item.canApply && !isUnavailable(item)),
+    ).length,
+)
 const urgentCount = computed(() => scholarships.value.filter((item) => daysLeft(item.deadline) <= 14 && !isUnavailable(item)).length)
 
 const categoryLabels = {
@@ -51,6 +58,15 @@ function formatMoney(value) {
 
 function isUnavailable(item) {
   return item.canApply === false || item.status !== 'OPEN' || item.seatsLeft <= 0
+}
+
+function isDraft(item) {
+  return draftScholarshipIds.value.has(String(item.id))
+}
+
+// 草稿還能繼續填：仍是草稿、獎學金開放中、且未過截止日。
+function continuable(item) {
+  return isDraft(item) && item.status === 'OPEN' && daysLeft(item.deadline) >= 0
 }
 
 function formatDate(value) {
@@ -84,7 +100,17 @@ function seatsPercent(item) {
 }
 
 onMounted(async () => {
-  scholarships.value = await listAvailableScholarships(auth.user?.user_id ?? auth.user?.id)
+  const studentId = auth.user?.user_id ?? auth.user?.id
+  const [items, applications] = await Promise.all([
+    listAvailableScholarships(studentId),
+    listMyApplications(studentId).catch(() => []),
+  ])
+  scholarships.value = items
+  draftScholarshipIds.value = new Set(
+    applications
+      .filter((application) => application.status === 'DRAFT')
+      .map((application) => String(application.scholarship_id ?? application.scholarshipId)),
+  )
   loading.value = false
 })
 </script>
@@ -144,14 +170,20 @@ onMounted(async () => {
         v-for="item in filteredScholarships"
         :key="item.id"
         class="scholarship-card scholarship-card--modern"
-        :class="{ 'scholarship-card--disabled': isUnavailable(item) }"
+        :class="{
+          'scholarship-card--disabled': isUnavailable(item) && !continuable(item),
+          'scholarship-card--draft': continuable(item),
+        }"
       >
         <div class="scholarship-card__head">
           <div>
             <p class="eyebrow">{{ categoryLabels[item.category] || item.category }} · {{ item.sponsor }}</p>
             <h2>{{ item.title }}</h2>
           </div>
-          <StatusBadge :value="item.status" />
+          <div class="scholarship-card__head-badges">
+            <span v-if="continuable(item)" class="draft-chip">草稿尚未完成</span>
+            <StatusBadge :value="item.status" />
+          </div>
         </div>
 
         <p class="scholarship-card__description">{{ item.description }}</p>
@@ -184,19 +216,19 @@ onMounted(async () => {
             <dt>GPA 門檻</dt>
             <dd>{{ item.minGpa ?? '不限' }}</dd>
           </div>
-          <div v-if="item.criteria.departments?.length && item.criteria.departments[0] !== '不限科系'">
+          <div v-if="item.criteria?.departments?.length && item.criteria.departments[0] !== '不限科系'">
             <dt>適用科系</dt>
             <dd>{{ item.departmentLimit || '不限科系' }}</dd>
           </div>
-          <div v-if="item.criteria.grades?.length">
+          <div v-if="item.criteria?.grades?.length">
             <dt>適用年級</dt>
             <dd>{{ item.criteria.grades.join('、') }}</dd>
           </div>
-          <div v-if="item.criteria.identities?.length">
+          <div v-if="item.criteria?.identities?.length">
             <dt>身分別限制</dt>
             <dd>{{ item.criteria.identities.join('、') }}</dd>
           </div>
-          <div v-if="item.criteria.familyStatuses?.length">
+          <div v-if="item.criteria?.familyStatuses?.length">
             <dt>家庭狀況限制</dt>
             <dd>{{ item.criteria.familyStatuses.join('、') }}</dd>
           </div>
@@ -207,7 +239,14 @@ onMounted(async () => {
         </dl>
 
         <div class="card-actions scholarship-card__actions">
-          <RouterLink v-if="item.alreadyApplied" class="secondary-button" to="/applications">
+          <RouterLink
+            v-if="continuable(item)"
+            class="primary-button"
+            :to="`/scholarships/${item.id}/apply`"
+          >
+            繼續填寫
+          </RouterLink>
+          <RouterLink v-else-if="item.alreadyApplied" class="secondary-button" to="/applications">
             查看狀態
           </RouterLink>
           <button v-else-if="isUnavailable(item)" class="secondary-button" type="button" disabled>

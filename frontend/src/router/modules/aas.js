@@ -12,6 +12,15 @@ export default [
     },
   },
   {
+    path: '/admin/units',
+    name: 'aas-units',
+    component: () => import('@/views/aas/UnitManagementView.vue'),
+    meta: {
+      title: '單位管理',
+      roles: ['ADMIN'],
+    },
+  },
+  {
     path: '/admin/users',
     name: 'aas-users',
     component: () => import('@/views/aas/UserManagementView.vue'),

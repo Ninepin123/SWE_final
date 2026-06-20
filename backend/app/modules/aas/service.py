@@ -8,17 +8,24 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.modules.aas.models import AuditLog, User
-from app.modules.aas.schemas import UserCreate, UserUpdate
+from app.modules.aas.models import AuditLog, Unit, User
+from app.modules.aas.schemas import UnitCreate, UnitUpdate, UserCreate, UserUpdate
 from app.modules.aas.security import hash_password, verify_password
 
 VALID_ROLES = {"STUDENT", "TEACHER", "SPONSOR", "REVIEWER", "ADMIN"}
 VALID_STATUS = {"ACTIVE", "DISABLED"}
+VALID_UNIT_TYPES = {"SCHOOL", "GOVERNMENT", "PRIVATE", "OTHER"}
 
 
 def _utcnow() -> datetime:
     """以 naive UTC 儲存/比較 session 到期時間，避免 tz-aware 與資料庫欄位混用。"""
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _audit_datetime(value: datetime | None) -> datetime | None:
+    if value is None or value.tzinfo is None:
+        return value
+    return value.astimezone().replace(tzinfo=None)
 
 
 def authenticate(db: Session, account: str, password: str) -> User:
@@ -81,6 +88,71 @@ def write_login_audit(db: Session, account: str, success: bool, detail: str) -> 
         user.user_id if user else None,
         f"帳號 {account}：{detail}",
     )
+
+
+# --- 單位管理（4.2 單位資料；獎助/審查單位以此做資料隔離） ---
+
+
+def list_units(db: Session, keyword: str | None = None) -> list[Unit]:
+    stmt = select(Unit)
+    if keyword and keyword.strip():
+        pattern = f"%{keyword.strip()}%"
+        stmt = stmt.where(or_(Unit.name.ilike(pattern), Unit.contact_email.ilike(pattern)))
+    return list(db.scalars(stmt.order_by(Unit.unit_id)))
+
+
+def create_unit(db: Session, data: UnitCreate) -> Unit:
+    if data.type not in VALID_UNIT_TYPES:
+        raise HTTPException(status_code=400, detail="單位類型不存在")
+    name = data.name.strip()
+    if db.scalar(select(Unit).where(Unit.name == name)):
+        raise HTTPException(status_code=409, detail="單位名稱已存在")
+    unit = Unit(name=name, type=data.type, contact_email=data.contact_email)
+    db.add(unit)
+    db.commit()
+    db.refresh(unit)
+    return unit
+
+
+def update_unit(db: Session, unit_id: int, data: UnitUpdate) -> Unit:
+    unit = db.get(Unit, unit_id)
+    if unit is None:
+        raise HTTPException(status_code=404, detail="找不到單位")
+    payload = data.model_dump(exclude_unset=True)
+    if "type" in payload and payload["type"] not in VALID_UNIT_TYPES:
+        raise HTTPException(status_code=400, detail="單位類型不存在")
+    if "name" in payload and payload["name"] is not None:
+        payload["name"] = payload["name"].strip()
+        if db.scalar(select(Unit).where(Unit.name == payload["name"], Unit.unit_id != unit_id)):
+            raise HTTPException(status_code=409, detail="單位名稱已存在")
+    for key, value in payload.items():
+        setattr(unit, key, value)
+    db.commit()
+    db.refresh(unit)
+    return unit
+
+
+def delete_unit(db: Session, unit_id: int) -> None:
+    unit = db.get(Unit, unit_id)
+    if unit is None:
+        raise HTTPException(status_code=404, detail="找不到單位")
+    bound_users = db.scalar(select(func.count(User.user_id)).where(User.unit_id == unit_id)) or 0
+    if bound_users:
+        raise HTTPException(status_code=409, detail="仍有帳號綁定此單位，請先改綁其他單位再刪除。")
+    # 獎學金以 unit_id 外鍵相依；延後匯入避免與 SMS 模組循環引用。
+    from app.modules.sms.models import Scholarship
+
+    bound_scholarships = db.scalar(
+        select(func.count(Scholarship.scholarship_id)).where(Scholarship.unit_id == unit_id)
+    ) or 0
+    if bound_scholarships:
+        raise HTTPException(status_code=409, detail="此單位仍有獎學金，請先轉移或刪除獎學金再刪除單位。")
+    try:
+        db.delete(unit)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="此單位已被其他資料引用，無法刪除。")
 
 
 def list_users(
@@ -189,7 +261,7 @@ def write_audit(db: Session, actor_id: int | None, action: str, target_type: str
 
 def list_audit_logs(
     db: Session,
-    actor_id: int | None = None,
+    actor_id: int | str | None = None,
     action: str | None = None,
     target_type: str | None = None,
     created_from: datetime | None = None,
@@ -198,11 +270,20 @@ def list_audit_logs(
 ) -> list[dict]:
     if limit < 1 or limit > 500:
         raise HTTPException(status_code=400, detail="查詢筆數需介於 1 到 500")
+    actor_filter = str(actor_id).strip() if actor_id is not None else ""
+    created_from = _audit_datetime(created_from)
+    created_to = _audit_datetime(created_to)
     stmt = select(AuditLog, User.name).join(
         User, AuditLog.actor_id == User.user_id, isouter=True
     )
-    if actor_id is not None:
-        stmt = stmt.where(AuditLog.actor_id == actor_id)
+    if actor_filter:
+        if actor_filter.isdecimal():
+            stmt = stmt.where(AuditLog.actor_id == int(actor_filter))
+        else:
+            account_candidates = {actor_filter}
+            if actor_filter.startswith("u-") and len(actor_filter) > 2:
+                account_candidates.add(actor_filter[2:])
+            stmt = stmt.where(or_(User.account.in_(account_candidates), User.name.ilike(f"%{actor_filter}%")))
     if action and action.strip():
         stmt = stmt.where(AuditLog.action == action.strip())
     if target_type and target_type.strip():

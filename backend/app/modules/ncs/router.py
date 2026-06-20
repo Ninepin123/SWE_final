@@ -22,7 +22,6 @@ from app.modules.ncs.schemas import (
     MessageOut,
     NotificationCreate,
     NotificationOut,
-    SystemAlertCreate,
     SystemAlertOut,
     SystemAlertUpdate,
     UnreadCountOut,
@@ -203,7 +202,7 @@ def create_issue_reply(
     issue_id: int,
     body: IssueReplyCreate,
     db: Session = Depends(get_db),
-    current: User = Depends(require_roles("ADMIN")),
+    current: User = Depends(get_current_user),
 ):
     return service.create_issue_reply(db, issue_id, body, current)
 
@@ -215,15 +214,6 @@ def list_issue_replies(
     current: User = Depends(get_current_user),
 ):
     return service.list_issue_replies(db, issue_id, current)
-
-
-@router.post("/system-alerts", response_model=SystemAlertOut, status_code=status.HTTP_201_CREATED)
-def create_system_alert(
-    body: SystemAlertCreate,
-    db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN")),
-):
-    return service.create_system_alert(db, body)
 
 
 @router.get("/system-alerts", response_model=list[SystemAlertOut])

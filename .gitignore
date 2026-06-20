@@ -17,6 +17,9 @@ backend/.env
 # ===== 可攜版 MySQL（start.bat 自動下載；程式與資料都不入版控） =====
 tools/
 
+# ===== 資料庫備份（本機產生，不入版控） =====
+backups/
+
 # ===== IDE =====
 .idea/
 *.iml

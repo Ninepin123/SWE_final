@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -341,6 +343,46 @@ def test_admin_can_filter_audit_logs(client, db_session):
     assert payload[0]["actor_name"] == admin.name
     assert payload[0]["action"] == "CREATE_USER"
     assert payload[0]["target_id"] == student.user_id
+
+
+def test_admin_can_filter_audit_logs_by_actor_account_and_datetime_range(client, db_session):
+    admin = create_user(db_session, account="admin", role="ADMIN")
+    student = create_user(db_session, account="student02")
+    db_session.add_all(
+        [
+            AuditLog(
+                actor_id=admin.user_id,
+                action="CREATE_USER",
+                target_type="user",
+                target_id=student.user_id,
+                detail="新增帳號",
+                created_at=datetime(2026, 6, 20, 23, 32, 30),
+            ),
+            AuditLog(
+                actor_id=admin.user_id,
+                action="LOGIN_SUCCESS",
+                target_type="user",
+                target_id=admin.user_id,
+                detail="登入成功",
+                created_at=datetime(2026, 6, 20, 22, 59, 59),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    response = client.get(
+        "/api/aas/audit-logs",
+        headers=auth_headers(admin),
+        params={
+            "actor_id": "u-admin",
+            "created_from": "2026-06-20T23:00:00",
+            "created_to": "2026-06-20T23:32:59.999",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["action"] for item in payload] == ["CREATE_USER"]
 
 
 def test_non_admin_cannot_view_audit_logs(client, db_session):

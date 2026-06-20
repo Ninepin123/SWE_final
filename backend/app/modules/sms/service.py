@@ -132,16 +132,27 @@ def get_scholarship(db: Session, scholarship_id: int) -> dict:
     return _to_out(s, unit_name)
 
 
+def _resolve_unit_id(db: Session, requested_unit_id: int | None, current: User) -> int:
+    """決定獎學金所屬單位：管理員可指定任一單位；獎助單位人員僅限自己單位；未指定則沿用登入者單位。"""
+    unit_id = requested_unit_id if requested_unit_id is not None else current.unit_id
+    if unit_id is None:
+        raise HTTPException(status_code=400, detail="請選擇提供單位")
+    if current.role != "ADMIN" and unit_id != current.unit_id:
+        raise HTTPException(status_code=403, detail="只能為自己所屬的單位建立獎學金")
+    if db.get(Unit, unit_id) is None:
+        raise HTTPException(status_code=404, detail="找不到指定的單位")
+    return unit_id
+
+
 def create_scholarship(db: Session, data: ScholarshipCreate, current: User) -> dict:
-    if current.unit_id is None:
-        raise HTTPException(status_code=400, detail="此帳號未綁定單位，無法建立獎學金")
+    unit_id = _resolve_unit_id(db, data.unit_id, current)
     if data.quota <= 0:
         raise HTTPException(status_code=400, detail="名額必須大於 0")
     if data.start_date and data.deadline and data.start_date >= data.deadline:
         raise HTTPException(status_code=400, detail="開始時間必須早於截止時間")
-        
+
     s = Scholarship(
-        unit_id=current.unit_id,
+        unit_id=unit_id,
         name=data.name,
         year=data.year,
         amount=data.amount,
@@ -171,6 +182,7 @@ def create_scholarship(db: Session, data: ScholarshipCreate, current: User) -> d
         s.criteria_note = data.criteria.note
 
     db.add(s)
+    _ensure_options(db, data.category, data.tags)
     db.commit()
     db.refresh(s)
     return _to_out(s, _unit_name(db, s.unit_id))
@@ -189,7 +201,14 @@ def update_scholarship(db: Session, scholarship_id: int, data: ScholarshipUpdate
     payload = data.model_dump(exclude_unset=True)
     if "status" in payload and payload["status"] not in VALID_STATUS:
         raise HTTPException(status_code=400, detail="狀態不存在")
-        
+
+    if "unit_id" in payload and payload["unit_id"] is not None and payload["unit_id"] != s.unit_id:
+        if current.role != "ADMIN":
+            raise HTTPException(status_code=403, detail="僅管理員可變更獎學金的提供單位")
+        if db.get(Unit, payload["unit_id"]) is None:
+            raise HTTPException(status_code=404, detail="找不到指定的單位")
+        s.unit_id = payload["unit_id"]
+
     if "name" in payload: s.name = payload["name"]
     if "year" in payload: s.year = payload["year"]
     if "amount" in payload: s.amount = payload["amount"]
@@ -228,9 +247,10 @@ def update_scholarship(db: Session, scholarship_id: int, data: ScholarshipUpdate
         if "family_statuses" in c: s.family_status_limit = json.dumps(c["family_statuses"], ensure_ascii=False) if c["family_statuses"] else None
         if "note" in c: s.criteria_note = c["note"]
 
+    _ensure_options(db, payload.get("category"), payload.get("tags"))
     db.commit()
     db.refresh(s)
-    
+
     # Reload used_quota
     used_quota = db.scalar(select(func.count()).select_from(Application).where(Application.scholarship_id == s.scholarship_id))
     setattr(s, "used_quota", used_quota)
@@ -251,6 +271,30 @@ def delete_scholarship(db: Session, scholarship_id: int, current: User) -> None:
 
 from app.modules.sms.models import ScholarshipOption
 from app.modules.sms.schemas import OptionCreate
+
+
+def _ensure_options(db: Session, category: str | None = None, tags: list[str] | None = None) -> None:
+    """獎學金存檔時，把新出現的分類／標籤自動登記進選項庫，作為下次新增時的建議來源。
+
+    僅新增尚未存在的選項；不在這裡 commit，交由呼叫端（建立／更新獎學金）的同一個交易一起寫入。
+    """
+    pending: list[tuple[str, str]] = []
+    if category:
+        pending.append(("CATEGORY", category))
+    for tag in tags or []:
+        pending.append(("TAG", tag))
+    for type_, raw in pending:
+        name = (raw or "").strip()
+        if not name:
+            continue
+        exists = db.execute(
+            select(ScholarshipOption).where(
+                ScholarshipOption.type == type_, ScholarshipOption.name == name
+            )
+        ).scalar_one_or_none()
+        if exists is None:
+            db.add(ScholarshipOption(type=type_, name=name))
+
 
 def list_options(db: Session, type_: str | None = None) -> list[dict]:
     query = select(ScholarshipOption)

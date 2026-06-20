@@ -5,7 +5,7 @@
     component: () => import('@/views/ncs/NotificationsView.vue'),
     meta: {
       title: '通知中心',
-      roles: ['STUDENT', 'TEACHER', 'SPONSOR', 'REVIEWER', 'ADMIN'],
+      roles: ['STUDENT', 'TEACHER', 'SPONSOR', 'REVIEWER'],
     },
   },
   {
@@ -14,7 +14,7 @@
     component: () => import('@/views/ncs/AnnouncementsView.vue'),
     meta: {
       title: '公告中心',
-      roles: ['STUDENT', 'TEACHER', 'SPONSOR', 'REVIEWER', 'ADMIN'],
+      roles: ['STUDENT', 'TEACHER', 'SPONSOR', 'REVIEWER'],
     },
   },
   {
@@ -32,7 +32,7 @@
     component: () => import('@/views/ncs/IssueReportView.vue'),
     meta: {
       title: '問題回報',
-      roles: ['STUDENT', 'TEACHER', 'SPONSOR', 'REVIEWER', 'ADMIN'],
+      roles: ['STUDENT', 'TEACHER', 'SPONSOR', 'REVIEWER'],
     },
   },
   {
@@ -51,6 +51,7 @@
     meta: {
       title: '系統警示',
       roles: ['ADMIN'],
+      widePage: true,
     },
   },
 ]

@@ -31,7 +31,7 @@ const actionLabels = {
 }
 
 const actionOptions = computed(() =>
-  [...new Set(logs.value.map((log) => log.action))].sort(),
+  [...new Set([...Object.keys(actionLabels), ...logs.value.map((log) => log.action).filter(Boolean)])].sort(),
 )
 
 function formatDateTime(value) {
@@ -46,17 +46,36 @@ function formatDateTime(value) {
   }).format(new Date(value))
 }
 
+function toLocalDateTimeParam(value, { endOfRange = false } = {}) {
+  const text = String(value ?? '').trim()
+  if (!text) return ''
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(text)) {
+    return `${text}:${endOfRange ? '59.999' : '00'}`
+  }
+  return text
+}
+
+function hasValidDateRange() {
+  if (!filters.created_from || !filters.created_to) return true
+  const from = new Date(toLocalDateTimeParam(filters.created_from)).getTime()
+  const to = new Date(toLocalDateTimeParam(filters.created_to, { endOfRange: true })).getTime()
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from <= to) return true
+  toast.error('結束時間不可早於開始時間')
+  return false
+}
+
 function buildParams() {
   const params = { limit: 200 }
-  if (filters.actor_id !== '') params.actor_id = Number(filters.actor_id)
+  if (filters.actor_id.trim()) params.actor_id = filters.actor_id.trim()
   if (filters.action) params.action = filters.action
   if (filters.target_type.trim()) params.target_type = filters.target_type.trim()
-  if (filters.created_from) params.created_from = new Date(filters.created_from).toISOString()
-  if (filters.created_to) params.created_to = new Date(filters.created_to).toISOString()
+  if (filters.created_from) params.created_from = toLocalDateTimeParam(filters.created_from)
+  if (filters.created_to) params.created_to = toLocalDateTimeParam(filters.created_to, { endOfRange: true })
   return params
 }
 
 async function reload() {
+  if (!hasValidDateRange()) return
   loading.value = true
   try {
     logs.value = await listAuditLogs(buildParams())
@@ -92,7 +111,7 @@ onMounted(reload)
       <div class="form-grid">
         <label>
           <span>操作者 ID</span>
-          <input v-model="filters.actor_id" min="1" type="number" placeholder="例如 1" />
+          <input v-model="filters.actor_id" type="text" placeholder="例如 u-admin 或 1" />
         </label>
         <label>
           <span>動作類型</span>
@@ -140,7 +159,7 @@ onMounted(reload)
             </tr>
           </thead>
           <tbody>
-            <tr v-for="log in logs" :key="log.log_id">
+            <tr v-for="log in logs" :key="log.log_id ?? log.id">
               <td>{{ formatDateTime(log.created_at) }}</td>
               <td>
                 <strong>{{ log.actor_name || '未知／未登入' }}</strong>

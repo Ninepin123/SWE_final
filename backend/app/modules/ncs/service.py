@@ -714,10 +714,17 @@ def create_issue_reply(
     if not issue:
         raise HTTPException(status_code=404, detail="找不到問題回報")
 
+    if current_user.role != "ADMIN" and issue.reporter_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="沒有權限回覆此問題回報")
+
+    reply_body = body.body.strip()
+    if not reply_body:
+        raise HTTPException(status_code=400, detail="請輸入回覆內容")
+
     reply = IssueReply(
         issue_id=issue_id,
         replier_id=current_user.user_id,
-        body=body.body,
+        body=reply_body,
     )
 
     issue.updated_at = datetime.utcnow()
@@ -725,16 +732,36 @@ def create_issue_reply(
     db.commit()
     db.refresh(reply)
 
-    create_notification_if_absent(
-        db,
-        user_id=issue.reporter_id,
-        title="問題回報有新回覆",
-        body=f"你的問題「{issue.title}」已有管理員回覆。",
-        category="ISSUE",
-        related_type="ISSUE",
-        related_id=issue.issue_id,
-        commit=True,
-    )
+    if current_user.user_id == issue.reporter_id:
+        admins = (
+            db.query(User)
+            .filter(User.role == "ADMIN", User.user_id != current_user.user_id)
+            .all()
+        )
+        reporter_name = current_user.name if hasattr(current_user, "name") else "使用者"
+        for admin in admins:
+            create_notification(
+                db,
+                user_id=admin.user_id,
+                title="問題回報有新留言",
+                body=f"{reporter_name} 在問題「{issue.title}」新增回覆。",
+                category="ISSUE",
+                related_type="ISSUE",
+                related_id=issue.issue_id,
+                commit=False,
+            )
+        db.commit()
+    elif issue.reporter_id != current_user.user_id:
+        create_notification(
+            db,
+            user_id=issue.reporter_id,
+            title="問題回報有新回覆",
+            body=f"你的問題「{issue.title}」已有管理員回覆。",
+            category="ISSUE",
+            related_type="ISSUE",
+            related_id=issue.issue_id,
+            commit=True,
+        )
 
     return reply
 

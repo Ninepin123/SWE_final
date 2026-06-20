@@ -5,7 +5,6 @@ import { defineStore } from 'pinia'
 import {
   getMe,
   login as loginApi,
-  loginAs as loginAsApi,
   logout as logoutApi,
   ROLE_LABELS,
 } from '@/api/aas'
@@ -48,23 +47,6 @@ export const useAuthStore = defineStore('auth', {
         localStorage.setItem('token', result.access_token)
         this.token = result.access_token
         this.user = result.user
-        return this.user
-      } finally {
-        this.loading = false
-      }
-    },
-    async loginAs(role) {
-      this.loading = true
-      try {
-        const result = await loginAsApi(role)
-        if (result?.access_token) {
-          localStorage.setItem('token', result.access_token)
-          this.token = result.access_token
-          this.user = result.user
-        } else {
-          this.user = result
-          this.token = localStorage.getItem('token')
-        }
         return this.user
       } finally {
         this.loading = false

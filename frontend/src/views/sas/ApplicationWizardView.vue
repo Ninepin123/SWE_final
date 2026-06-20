@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import BaseCard from '@/components/common/BaseCard.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -33,6 +33,14 @@ const error = ref('')
 const scholarship = ref(null)
 const applicationId = ref(null)
 const existingSubmitted = ref(false)
+
+// 自動儲存草稿：使用者一邊填、系統一邊存，不需要手動按「儲存草稿」。
+const ready = ref(false)
+const autoSaveState = ref('idle') // 'idle' | 'saving' | 'saved' | 'error'
+const lastSavedAt = ref(null)
+let autoSaveTimer = null
+let lastSavedAppJson = ''
+const lastSavedDocs = reactive({})
 
 const form = reactive({
   contact_phone: '',
@@ -68,7 +76,7 @@ function applicationPayload() {
   }
 }
 
-function validateStep(step = currentStep.value) {
+function validateStep(step = currentStep.value, { focusInvalidStep = false } = {}) {
   error.value = ''
   if (step === 0 && (!form.contact_phone.trim() || !form.address.trim())) {
     error.value = '請填寫聯絡電話與通訊地址。'
@@ -83,6 +91,10 @@ function validateStep(step = currentStep.value) {
   ) {
     error.value = '請至少填寫一份文字文件。'
   }
+  if (error.value) {
+    if (focusInvalidStep) currentStep.value = step
+    toast.warning(error.value)
+  }
   return !error.value
 }
 
@@ -96,8 +108,33 @@ function prevStep() {
   currentStep.value -= 1
 }
 
-async function saveDraft(showMessage = true) {
+// 記住「上次成功存檔的內容」，用來判斷是否真的有改動、要不要重存文件。
+function snapshotSaved() {
+  lastSavedAppJson = JSON.stringify(applicationPayload())
+  for (const [documentType, document] of Object.entries(form.documents)) {
+    lastSavedDocs[documentType] = document.content_text
+  }
+}
+
+function hasUnsavedChanges() {
+  if (JSON.stringify(applicationPayload()) !== lastSavedAppJson) return true
+  return Object.entries(form.documents).some(
+    ([documentType, document]) => (lastSavedDocs[documentType] ?? '') !== document.content_text,
+  )
+}
+
+// 所有存檔（自動 + 手動 + 送出前）串接在同一條 promise 上，避免兩個存檔同時
+// 跑而重複建立草稿（例如自動儲存還沒回來、使用者就按了正式送出）。
+let saveChain = Promise.resolve()
+
+function persistDraft(options = {}) {
+  saveChain = saveChain.then(() => doPersistDraft(options))
+  return saveChain
+}
+
+async function doPersistDraft({ showSuccess = true, silentError = false } = {}) {
   saving.value = true
+  if (!showSuccess) autoSaveState.value = 'saving'
   error.value = ''
   try {
     const payload = applicationPayload()
@@ -113,28 +150,57 @@ async function saveDraft(showMessage = true) {
     }
     for (const [documentType, document] of Object.entries(form.documents)) {
       if (!document.content_text.trim()) continue
+      // 內容沒變就不重存，避免每次自動存檔都灌一筆「更新文件」事件。
+      if (lastSavedDocs[documentType] === document.content_text) continue
       await saveApplicationDocument(applicationId.value, {
         document_type: documentType,
         title: document.title,
         content_text: document.content_text,
       })
     }
-    if (showMessage) toast.success('草稿與文字文件已儲存')
+    snapshotSaved()
+    lastSavedAt.value = new Date()
+    autoSaveState.value = 'saved'
+    if (showSuccess) toast.success('草稿與文字文件已儲存')
     return saved
   } catch (saveError) {
     error.value = saveError.response?.data?.detail || saveError.message || '草稿儲存失敗'
+    autoSaveState.value = 'error'
+    if (!silentError) toast.error(error.value)
     return null
   } finally {
     saving.value = false
   }
 }
 
+function saveDraft() {
+  return persistDraft({ showSuccess: true })
+}
+
+function scheduleAutoSave() {
+  if (!ready.value || existingSubmitted.value) return
+  if (autoSaveTimer) clearTimeout(autoSaveTimer)
+  autoSaveTimer = setTimeout(runAutoSave, 1200)
+}
+
+async function runAutoSave() {
+  // 有其他存檔/送出正在進行時稍後再試，避免重複建立草稿。
+  if (!ready.value || saving.value || submitting.value || existingSubmitted.value) {
+    scheduleAutoSave()
+    return
+  }
+  if (!hasUnsavedChanges()) return
+  await persistDraft({ showSuccess: false, silentError: true })
+}
+
 async function submit() {
-  if (!validateStep(0) || !validateStep(1) || !validateStep(2)) return
+  for (const step of [0, 1, 2]) {
+    if (!validateStep(step, { focusInvalidStep: true })) return
+  }
   if (!window.confirm('正式送出後將無法修改申請資料，確定送出嗎？')) return
   submitting.value = true
   try {
-    const saved = await saveDraft(false)
+    const saved = await persistDraft({ showSuccess: false })
     if (!saved) return
     await submitApplication(applicationId.value)
     toast.success('申請已正式送出')
@@ -142,6 +208,7 @@ async function submit() {
   } catch (submitError) {
     error.value =
       submitError.response?.data?.detail || submitError.message || '申請送出失敗'
+    toast.error(error.value)
   } finally {
     submitting.value = false
   }
@@ -188,8 +255,35 @@ onMounted(async () => {
     error.value = loadError.response?.data?.detail || loadError.message || '申請資料載入失敗'
   } finally {
     loading.value = false
+    // 以載入完成當下的內容作為基準，之後使用者一改動就會觸發自動儲存。
+    snapshotSaved()
+    ready.value = true
   }
 })
+
+// 監看所有可編輯欄位，改動後 1.2 秒（去抖動）自動把草稿存回後端。
+watch(
+  () => [
+    form.contact_phone,
+    form.address,
+    form.household_status,
+    form.academic_note,
+    form.statement,
+    form.documents.TRANSCRIPT.content_text,
+    form.documents.AUTOBIOGRAPHY.content_text,
+    form.documents.CERTIFICATE.content_text,
+  ],
+  scheduleAutoSave,
+)
+
+onBeforeUnmount(() => {
+  if (autoSaveTimer) clearTimeout(autoSaveTimer)
+})
+
+function formatSavedTime(value) {
+  if (!value) return ''
+  return new Intl.DateTimeFormat('zh-TW', { hour: '2-digit', minute: '2-digit' }).format(value)
+}
 </script>
 
 <template>
@@ -216,7 +310,6 @@ onMounted(async () => {
 
     <BaseCard class="application-step-card">
       <StepForm :steps="steps" :current="currentStep" />
-      <p v-if="error" class="form-error">{{ error }}</p>
     </BaseCard>
 
     <BaseCard v-if="currentStep === 0" title="基本聯絡資料">
@@ -284,7 +377,7 @@ onMounted(async () => {
     </BaseCard>
 
     <BaseCard v-if="currentStep === 3" title="確認送出">
-      <dl class="review-list">
+      <dl class="review-list application-review-list">
         <div>
           <dt>獎學金</dt>
           <dd>{{ scholarship.title }}</dd>
@@ -316,6 +409,12 @@ onMounted(async () => {
     </BaseCard>
 
     <div class="form-actions">
+      <span class="autosave-status" :class="`autosave-status--${autoSaveState}`">
+        <template v-if="autoSaveState === 'saving'">草稿自動儲存中…</template>
+        <template v-else-if="autoSaveState === 'error'">自動儲存失敗，請按「儲存草稿」</template>
+        <template v-else-if="autoSaveState === 'saved'">已自動儲存 · {{ formatSavedTime(lastSavedAt) }}</template>
+        <template v-else>系統會自動保留草稿，免按儲存</template>
+      </span>
       <button
         class="secondary-button"
         type="button"

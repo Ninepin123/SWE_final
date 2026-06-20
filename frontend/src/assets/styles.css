@@ -71,6 +71,19 @@
   --radius-lg: 14px;    /* card / modal */
   --radius-pill: 999px;
 
+  /* —— 內容寬度（版面留白的單一來源）——
+     全站統一採用「系統警示」頁的寬版版面，所有頁面中央內容欄寬度一致。
+     在寬螢幕上以 margin:auto 置中，左右自然留白，避免內容拉滿。 */
+  --content-max: 1480px;
+  --content-max-wide: 1480px;
+
+  /* —— 間距節奏（與全站 gap/padding 對齊的單一刻度）—— */
+  --spacing-xs: 6px;
+  --spacing-sm: 10px;
+  --spacing-md: 16px;
+  --spacing-lg: 20px;
+  --spacing-xl: 24px;
+
   /* —— 陰影分層（暖墨）—— */
   --shadow-xs: 0 1px 2px rgba(40, 33, 22, 0.05);
   --shadow-sm: 0 1px 3px rgba(40, 33, 22, 0.07), 0 1px 2px rgba(40, 33, 22, 0.04);
@@ -314,16 +327,6 @@ strong {
   color: var(--primary);
 }
 
-.sidebar__dev-note {
-  margin-top: auto;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--warning-soft);
-  color: var(--warning);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
 .workspace {
   min-width: 0;
 }
@@ -432,9 +435,13 @@ strong {
    ============================================================ */
 
 .page-shell {
-  max-width: 1280px;
+  max-width: var(--content-max);
   margin: 0 auto;
-  padding: 28px 32px 56px;
+  padding: 28px 48px 56px;
+}
+
+.page-shell--wide {
+  max-width: var(--content-max-wide);
 }
 
 .page-grid {
@@ -486,6 +493,12 @@ strong {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 18px;
+}
+
+.card__title-group {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
 }
 
 .card__header h2 {
@@ -720,6 +733,24 @@ textarea:focus {
 .form-actions--left {
   justify-content: flex-start;
   margin: 14px 0 24px;
+}
+
+/* 申請精靈：自動儲存狀態，靠左、把按鈕推到右側 */
+.autosave-status {
+  margin-right: auto;
+  align-self: center;
+  font-size: 0.82rem;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+
+.autosave-status--saving,
+.autosave-status--saved {
+  color: var(--primary-strong);
+}
+
+.autosave-status--error {
+  color: var(--danger);
 }
 
 .form-error {
@@ -961,6 +992,15 @@ textarea:focus {
   gap: 12px;
 }
 
+.application-review-list div {
+  grid-template-columns: minmax(96px, max-content) minmax(0, 1fr);
+  align-items: start;
+}
+
+.application-review-list dt {
+  white-space: nowrap;
+}
+
 dt {
   color: var(--muted);
   font-weight: 600;
@@ -974,7 +1014,9 @@ dd {
 
 .card-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 0.75rem;
 }
 
 /* ============================================================
@@ -1094,11 +1136,13 @@ dd {
 .toast-host {
   position: fixed;
   z-index: 80;
-  right: 20px;
-  bottom: 20px;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
   display: grid;
-  width: min(380px, calc(100vw - 40px));
+  width: min(520px, calc(100vw - 32px));
   gap: 10px;
+  pointer-events: none;
 }
 
 .toast {
@@ -1113,6 +1157,15 @@ dd {
   color: var(--text);
   font-weight: 500;
   text-align: left;
+  pointer-events: auto;
+  animation: toast-in 0.16s ease;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
 }
 
 .toast--success {
@@ -1121,6 +1174,11 @@ dd {
 
 .toast--danger {
   border-left-color: var(--danger);
+}
+
+.toast--warning {
+  border-left-color: var(--warning);
+  background: #fffaf0;
 }
 
 .toast--info {
@@ -1598,21 +1656,34 @@ dd {
 .login-hero__badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
   margin-top: 12px;
 }
 
 .login-hero__badges span {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 8px;
+  min-height: 38px;
+  min-width: 0;
+  padding: 8px 14px;
   border: 1px solid rgba(241, 234, 217, 0.22);
   border-radius: var(--radius-pill);
   background: rgba(241, 234, 217, 0.07);
   color: rgba(241, 234, 217, 0.92);
   font-size: 13px;
   font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  writing-mode: horizontal-tb;
+}
+
+.login-hero__badges .icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
 }
 
 .login-panel {
@@ -1748,10 +1819,6 @@ body.dev-mode .dev-only {
     margin-left: 12px;
     padding-bottom: 4px;
     gap: 4px;
-  }
-
-  .sidebar__dev-note {
-    display: none;
   }
 
   .topbar {

@@ -12,7 +12,7 @@ const auth = useAuthStore()
       <div class="empty-state__mark">禁</div>
       <h3>這個功能不屬於目前角色</h3>
       <p>
-        目前登入角色是 {{ auth.roleLabel }}。請回到總覽，或切換為具備權限的測試角色。
+        目前登入角色是 {{ auth.roleLabel }}。請回到總覽，或使用具備權限的正式帳號登入。
       </p>
       <RouterLink class="primary-button" to="/dashboard">回到總覽</RouterLink>
     </div>

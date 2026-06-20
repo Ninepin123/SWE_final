@@ -4,7 +4,7 @@
 1. 用 backend/.env 的 DATABASE_URL 嘗試連線。
 2. 連不上且原因是「資料庫不存在 / 帳號不存在」→ 引導輸入 MySQL root 密碼，
    執行 00_create_database.sql 建庫與開發帳號（每台電腦只需一次）。
-3. 依編號執行 database/schema/01~99 與 database/seed/ 的所有 SQL。
+3. 依編號執行 database/schema/01~99 的所有 SQL。
    所有 SQL 都要求可重複執行（IF NOT EXISTS / INSERT IGNORE），
    所以每次啟動都會跑一遍，確保拿到別人最新的資料表。
 
@@ -23,7 +23,6 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_DIR = ROOT / "database" / "schema"
-SEED_DIR = ROOT / "database" / "seed"
 
 ERR_ACCESS_DENIED = 1045
 ERR_UNKNOWN_DB = 1049
@@ -133,8 +132,7 @@ def main():
             raise
 
     schema_files = sorted(f for f in SCHEMA_DIR.glob("*.sql") if not f.name.startswith("00_"))
-    seed_files = sorted(SEED_DIR.glob("*.sql"))
-    for f in schema_files + seed_files:
+    for f in schema_files:
         try:
             run_sql_file(conn, f)
             print(f"  v {f.relative_to(ROOT)}")

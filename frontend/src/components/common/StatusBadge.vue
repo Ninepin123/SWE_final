@@ -1,10 +1,5 @@
 <script setup>
 import { computed } from 'vue'
-import {
-  APPLICATION_STATUS,
-  RECOMMENDATION_STATUS,
-  SCHOLARSHIP_STATUS,
-} from '@/services/mockBackend'
 
 const props = defineProps({
   value: {
@@ -15,9 +10,18 @@ const props = defineProps({
 
 const meta = computed(() => {
   const labels = {
-    ...APPLICATION_STATUS,
-    ...RECOMMENDATION_STATUS,
-    ...SCHOLARSHIP_STATUS,
+    SUBMITTED: '已送出',
+    UNDER_REVIEW: '審查中',
+    NEED_SUPPLEMENT: '需補件',
+    NEEDS_SUPPLEMENT: '需補件',
+    APPROVED: '已通過',
+    REJECTED: '未通過',
+    REQUESTED: '已邀請',
+    PENDING: '等待填寫',
+    REMINDED: '已提醒',
+    OPEN: '開放申請',
+    CLOSED: '已截止',
+    DRAFT: '草稿',
     ACTIVE: '啟用',
     DISABLED: '停用',
   }
@@ -28,8 +32,10 @@ const meta = computed(() => {
     APPROVED: 'success',
     SUBMITTED: 'success',
     UNDER_REVIEW: 'info',
+    REQUESTED: 'warning',
     PENDING: 'warning',
     REMINDED: 'warning',
+    NEED_SUPPLEMENT: 'warning',
     NEEDS_SUPPLEMENT: 'warning',
     REJECTED: 'danger',
     CLOSED: 'muted',

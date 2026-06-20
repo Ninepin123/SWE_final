@@ -1,61 +1,19 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
 import BaseCard from '@/components/common/BaseCard.vue'
 import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
-import { getDashboardSummary } from '@/services/mockBackend'
+import { listUsers } from '@/api/aas'
 import { getUnreadNotificationCount } from '@/api/ncs'
+import { getAwardList, listReviewApplications } from '@/api/ras'
+import { listAvailableScholarships, listMyApplications } from '@/api/sas'
+import { listScholarships } from '@/api/sms'
+import { getTeacherRecommendationDashboard } from '@/api/trs'
 
 const auth = useAuthStore()
 const loading = ref(true)
 const summary = ref({})
-
-const quickLinks = computed(() => {
-  const links = {
-    STUDENT: [
-      { label: '查看可申請獎學金', to: '/scholarships', primary: true },
-      { label: '追蹤我的申請', to: '/applications' },
-      { label: '更新個人資料', to: '/profile' },
-      { label: '查看公告', to: '/announcements' },
-      { label: '查看通知', to: '/notifications' },
-      { label: '公告中心', to: '/announcements' }
-    ],
-    REVIEWER: [
-      { label: '進入審查工作台', to: '/reviews', primary: true },
-      { label: '查看公告', to: '/announcements' },
-      { label: '查看通知', to: '/notifications' },
-      { label: '公告中心', to: '/announcements' }
-    ],
-    ADMIN: [
-      { label: '管理帳號', to: '/admin/users', primary: true },
-      { label: '管理獎學金', to: '/admin/scholarships' },
-      { label: '公告管理', to: '/admin/announcements' },
-      { label: '查看公告', to: '/announcements' },
-      { label: '查看通知', to: '/notifications' },
-      { label: '公告中心', to: '/announcements' },
-      {
-        label: '公告管理',
-        to: '/admin/announcements',
-        roles: ['ADMIN'],
-      }
-    ],
-    TEACHER: [
-      { label: '處理推薦信邀請', to: '/recommendations', primary: true },
-      { label: '查看公告', to: '/announcements' },
-      { label: '查看通知', to: '/notifications' },
-      { label: '公告中心', to: '/announcements' }
-    ],
-    SPONSOR: [
-      { label: '管理獎學金', to: '/admin/scholarships', primary: true },
-      { label: '查看公告', to: '/announcements' },
-      { label: '查看通知', to: '/notifications' },
-      { label: '公告中心', to: '/announcements' }
-    ],
-  }
-
-  return links[auth.role] ?? []
-})
+const loadError = ref('')
 
 const stats = computed(() => {
   if (auth.role === 'STUDENT') {
@@ -63,7 +21,16 @@ const stats = computed(() => {
       { label: '我的申請', value: summary.value.applications ?? 0, tone: 'info', icon: '📄', hint: '已建立的申請紀錄' },
       { label: '審查中', value: summary.value.underReview ?? 0, tone: 'blue', icon: '🔎', hint: '正在等待審核' },
       { label: '需補件', value: summary.value.needsSupplement ?? 0, tone: 'warning', icon: '⚠️', hint: '請優先處理' },
-      { label: '可申請', value: summary.value.availableScholarships ?? 0, tone: 'success', icon: '🎓', hint: '目前開放項目' },
+      {
+        label: '可申請',
+        value: summary.value.availableScholarships ?? 0,
+        tone: 'success',
+        icon: '🎓',
+        hint:
+          (summary.value.availableDrafts ?? 0) > 0
+            ? `符合資格可申請（含 ${summary.value.availableDrafts} 件草稿待完成）`
+            : '符合資格可申請',
+      },
       { label: '未讀通知', value: summary.value.unread ?? 0, tone: 'info', icon: '🔔', hint: '最新訊息' },
     ]
   }
@@ -82,7 +49,6 @@ const stats = computed(() => {
       { label: '帳號數', value: summary.value.users ?? 0, tone: 'info', icon: '👥', hint: '平台使用者' },
       { label: '獎學金', value: summary.value.scholarships ?? 0, tone: 'success', icon: '🏛️', hint: '總項目數' },
       { label: '開放中', value: summary.value.openScholarships ?? 0, tone: 'blue', icon: '📣', hint: '目前開放申請' },
-      { label: '未讀通知', value: summary.value.unread ?? 0, tone: 'warning', icon: '🔔', hint: '待確認訊息' },
     ]
   }
 
@@ -117,10 +83,24 @@ const tasks = computed(() => {
   if (auth.role === 'STUDENT') {
     return [
       { title: '確認是否有補件要求', text: `${summary.value.needsSupplement ?? 0} 件申請可能需要補件`, tone: 'warning' },
-      { title: '查看可申請獎學金', text: `${summary.value.availableScholarships ?? 0} 項目前可申請`, tone: 'success' },
+      {
+        title: '查看可申請獎學金',
+        text:
+          (summary.value.availableDrafts ?? 0) > 0
+            ? `${summary.value.availableScholarships ?? 0} 項可申請，其中 ${summary.value.availableDrafts} 件草稿待完成`
+            : `${summary.value.availableScholarships ?? 0} 項目前可申請`,
+        tone: 'success',
+      },
       { title: '追蹤申請進度', text: `${summary.value.underReview ?? 0} 件申請審查中`, tone: 'info' },
     ]
   }
+  if (auth.role === 'ADMIN') {
+    return [
+      { title: '處理待辦事項', text: '依照側邊欄進入主要工作區', tone: 'warning' },
+      { title: '維護公告與資料', text: '在公告管理發布與處理公告，並檢查資料正確性', tone: 'success' },
+    ]
+  }
+
   return [
     { title: '處理待辦事項', text: '依照側邊欄進入主要工作區', tone: 'warning' },
     { title: '確認通知中心', text: `${summary.value.unread ?? 0} 則未讀通知`, tone: 'info' },
@@ -128,28 +108,144 @@ const tasks = computed(() => {
   ]
 })
 
+// 截止日尚未過（沒設定截止日就視為仍可申請）。
+function deadlineActive(item) {
+  if (!item.deadline) return true
+  return new Date(item.deadline) >= new Date()
+}
+
+// 「可申請」＝符合資格的全新項目 ＋ 已開草稿但還沒填完、且獎學金仍開放的項目。
+// 與「可申請獎學金」列表頁同源同判定，避免兩個畫面數字對不上。
+function countAvailableWithDrafts(scholarships, draftScholarshipIds) {
+  let fresh = 0
+  let drafts = 0
+  for (const item of scholarships) {
+    if (draftScholarshipIds.has(String(item.id))) {
+      // 草稿尚未完成：只要獎學金仍開放、未截止就算「可申請」（點進去可繼續填）。
+      if (item.status === 'OPEN' && deadlineActive(item)) drafts += 1
+    } else if (item.canApply && item.status === 'OPEN' && item.seatsLeft > 0) {
+      fresh += 1
+    }
+  }
+  return { available: fresh + drafts, drafts }
+}
+
+async function loadUnreadCount() {
+  return getUnreadNotificationCount()
+}
+
+async function loadStudentSummary() {
+  const studentId = auth.user?.user_id ?? auth.user?.id
+  const [scholarships, applications, unread] = await Promise.all([
+    listAvailableScholarships(studentId),
+    listMyApplications(studentId),
+    loadUnreadCount(),
+  ])
+  const draftScholarshipIds = new Set(
+    applications
+      .filter((application) => application.status === 'DRAFT')
+      .map((application) => String(application.scholarship_id ?? application.scholarshipId)),
+  )
+  const { available, drafts } = countAvailableWithDrafts(scholarships, draftScholarshipIds)
+
+  return {
+    applications: applications.length,
+    underReview: applications.filter((application) => application.status === 'UNDER_REVIEW').length,
+    needsSupplement: applications.filter((application) =>
+      ['NEED_SUPPLEMENT', 'NEEDS_SUPPLEMENT'].includes(application.status),
+    ).length,
+    availableScholarships: available,
+    availableDrafts: drafts,
+    unread,
+  }
+}
+
+async function loadReviewerSummary() {
+  const [applications, awards, unread] = await Promise.all([
+    listReviewApplications(),
+    getAwardList(),
+    loadUnreadCount(),
+  ])
+
+  return {
+    pending: applications.filter((application) =>
+      ['SUBMITTED', 'UNDER_REVIEW', 'NEED_SUPPLEMENT', 'NEEDS_SUPPLEMENT'].includes(application.status),
+    ).length,
+    approved: awards.length,
+    rejected: applications.filter((application) => application.status === 'REJECTED').length,
+    unread,
+  }
+}
+
+async function loadAdminSummary() {
+  const [users, scholarships] = await Promise.all([
+    listUsers(),
+    listScholarships(),
+  ])
+
+  return {
+    users: users.length,
+    scholarships: scholarships.length,
+    openScholarships: scholarships.filter((item) => item.status === 'OPEN' && deadlineActive(item)).length,
+  }
+}
+
+async function loadSponsorSummary() {
+  const [scholarships, unread] = await Promise.all([
+    listScholarships(),
+    loadUnreadCount(),
+  ])
+  const unitId = auth.user?.unit_id
+  const ownedScholarships = unitId
+    ? scholarships.filter((item) => String(item.unit_id) === String(unitId))
+    : scholarships
+
+  return {
+    scholarships: ownedScholarships.length,
+    openScholarships: ownedScholarships.filter((item) => item.status === 'OPEN' && deadlineActive(item)).length,
+    unread,
+  }
+}
+
+async function loadTeacherSummary() {
+  const [dashboard, unread] = await Promise.all([
+    getTeacherRecommendationDashboard(),
+    loadUnreadCount(),
+  ])
+
+  return {
+    pendingRecommendations: dashboard.pendingCount + dashboard.draftCount,
+    submittedRecommendations: dashboard.submittedCount,
+    unread,
+  }
+}
+
+function resolveErrorMessage(error) {
+  return error?.response?.data?.detail || error?.message || '系統總覽載入失敗'
+}
+
 async function loadDashboard() {
   loading.value = true
+  loadError.value = ''
 
   try {
-    const dashboardSummary = await getDashboardSummary(auth.user)
-    let unread = dashboardSummary?.unread ?? 0
-
-    try {
-      unread = await getUnreadNotificationCount()
-    } catch (error) {
-      console.warn('取得未讀通知數失敗，改用 dashboard summary 的 unread 值', error)
-    }
-
-    summary.value = {
-      ...(dashboardSummary ?? {}),
-      unread,
+    if (auth.role === 'STUDENT') {
+      summary.value = await loadStudentSummary()
+    } else if (auth.role === 'REVIEWER') {
+      summary.value = await loadReviewerSummary()
+    } else if (auth.role === 'ADMIN') {
+      summary.value = await loadAdminSummary()
+    } else if (auth.role === 'SPONSOR') {
+      summary.value = await loadSponsorSummary()
+    } else if (auth.role === 'TEACHER') {
+      summary.value = await loadTeacherSummary()
+    } else {
+      summary.value = {}
     }
   } catch (error) {
     console.error('載入系統總覽失敗', error)
-    summary.value = {
-      unread: 0,
-    }
+    loadError.value = resolveErrorMessage(error)
+    summary.value = {}
   } finally {
     loading.value = false
   }
@@ -166,19 +262,13 @@ onMounted(loadDashboard)
         <h2>{{ auth.user?.name }}，你好</h2>
         <p>{{ guidance }}</p>
       </div>
-      <div class="dashboard-hero__actions">
-        <RouterLink
-          v-for="link in quickLinks"
-          :key="link.to"
-          :class="link.primary ? 'primary-button' : 'secondary-button'"
-          :to="link.to"
-        >
-          {{ link.label }}
-        </RouterLink>
-      </div>
     </section>
 
     <LoadingSkeleton v-if="loading" :rows="4" />
+
+    <BaseCard v-else-if="loadError" title="無法載入系統總覽" eyebrow="Dashboard">
+      <p class="form-error">{{ loadError }}</p>
+    </BaseCard>
 
     <section v-else class="stat-grid stat-grid--modern">
       <BaseCard
@@ -196,7 +286,7 @@ onMounted(loadDashboard)
       </BaseCard>
     </section>
 
-    <section class="dashboard-two-column">
+    <section v-if="!loading && !loadError" class="dashboard-two-column">
       <BaseCard title="我的待辦" eyebrow="Action Items">
         <div class="task-list">
           <div v-for="task in tasks" :key="task.title" class="task-item" :class="`task-item--${task.tone}`">

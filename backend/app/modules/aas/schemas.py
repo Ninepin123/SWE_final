@@ -9,8 +9,25 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class RoleQuickLoginRequest(BaseModel):
-    role: str
+class UnitOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    unit_id: int
+    name: str
+    type: str
+    contact_email: str | None = None
+    created_at: datetime | None = None
+
+
+class UnitCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    type: str = "OTHER"
+    contact_email: str | None = None
+
+
+class UnitUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    type: str | None = None
+    contact_email: str | None = None
 
 
 class UserOut(BaseModel):

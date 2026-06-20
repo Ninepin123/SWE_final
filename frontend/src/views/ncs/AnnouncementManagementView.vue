@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import BaseCard from '@/components/common/BaseCard.vue'
+import BaseModal from '@/components/common/BaseModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 import {
@@ -14,8 +15,10 @@ const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
 const success = ref('')
+const formError = ref('')
 const announcements = ref([])
 const editingId = ref(null)
+const showForm = ref(false)
 
 const form = reactive({
   title: '',
@@ -46,6 +49,19 @@ function resetForm() {
   form.status = 'PUBLISHED'
   form.expiresAt = ''
   form.notifyUsers = true
+}
+
+function openCreate() {
+  resetForm()
+  formError.value = ''
+  success.value = ''
+  showForm.value = true
+}
+
+function closeForm() {
+  showForm.value = false
+  formError.value = ''
+  resetForm()
 }
 
 function formatDate(value) {
@@ -86,6 +102,8 @@ function startEdit(item) {
   form.notifyUsers = false
   success.value = ''
   error.value = ''
+  formError.value = ''
+  showForm.value = true
 }
 
 function buildPayload() {
@@ -114,16 +132,16 @@ async function loadAnnouncements() {
 }
 
 async function submitForm() {
-  error.value = ''
+  formError.value = ''
   success.value = ''
 
   if (!form.title.trim()) {
-    error.value = '請輸入公告標題'
+    formError.value = '請輸入公告標題'
     return
   }
 
   if (!form.isGlobal && !form.targetRole) {
-    error.value = '指定對象公告需選擇角色'
+    formError.value = '指定對象公告需選擇角色'
     return
   }
 
@@ -140,10 +158,10 @@ async function submitForm() {
       success.value = '公告已發布'
     }
 
-    resetForm()
+    closeForm()
     await loadAnnouncements()
   } catch (err) {
-    error.value = err?.response?.data?.detail || err?.message || '公告儲存失敗'
+    formError.value = err?.response?.data?.detail || err?.message || '公告儲存失敗'
   } finally {
     saving.value = false
   }
@@ -171,10 +189,20 @@ onMounted(loadAnnouncements)
 <template>
   <div class="page-grid">
     <BaseCard title="公告管理" eyebrow="NCS Announcement Admin">
+      <template #actions>
+        <button class="primary-button" type="button" @click="openCreate">新增公告</button>
+      </template>
       <p>系統管理員可發布全域公告或指定角色公告，並維護既有公告內容。</p>
     </BaseCard>
 
-    <BaseCard :title="isEditing ? '修改公告' : '新增公告'">
+    <p v-if="success" class="form-success">{{ success }}</p>
+    <p v-if="error" class="form-error">{{ error }}</p>
+
+    <BaseModal
+      :show="showForm"
+      :title="isEditing ? '修改公告' : '新增公告'"
+      @close="closeForm"
+    >
       <form class="announcement-form" @submit.prevent="submitForm">
         <label>
           公告標題
@@ -220,19 +248,16 @@ onMounted(loadAnnouncements)
           發布後建立站內通知
         </label>
 
-        <p v-if="error" class="form-error">{{ error }}</p>
-        <p v-if="success" class="form-success">{{ success }}</p>
-
-        <div class="form-actions">
-          <button class="primary-button" type="submit" :disabled="saving">
-            {{ saving ? '儲存中...' : isEditing ? '更新公告' : '發布公告' }}
-          </button>
-          <button v-if="isEditing" type="button" class="secondary-button" @click="resetForm">
-            取消編輯
-          </button>
-        </div>
+        <p v-if="formError" class="form-error">{{ formError }}</p>
       </form>
-    </BaseCard>
+
+      <template #footer>
+        <button type="button" class="secondary-button" @click="closeForm">取消</button>
+        <button class="primary-button" type="button" :disabled="saving" @click="submitForm">
+          {{ saving ? '儲存中...' : isEditing ? '更新公告' : '發布公告' }}
+        </button>
+      </template>
+    </BaseModal>
 
     <LoadingSkeleton v-if="loading" :rows="4" />
 
@@ -344,6 +369,10 @@ onMounted(loadAnnouncements)
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+}
+
+.announcement-card__actions {
+  margin-top: 1.5rem;
 }
 
 .announcement-card__header h3 {

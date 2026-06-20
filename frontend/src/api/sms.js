@@ -1,63 +1,32 @@
 // SMS 獎助學金資料管理 — API 呼叫（負責人：填上姓名）
 // 對應後端 backend/app/modules/sms/router.py，路徑前綴 /api/sms
-import http, { withApiFallback } from './http'
-import * as mock from '@/services/mockBackend'
+import http, { withApiData } from './http'
 
-// 範例（骨架測試用，開發開始後可移除）：
 export function ping() {
   return http.get('/sms/ping')
 }
 
 export function listScholarships(params) {
-  return withApiFallback(() => http.get('/sms/scholarships', { params }), () =>
-    mock.listScholarships(params),
-  )
+  return withApiData(() => http.get('/sms/scholarships', { params }))
 }
 
 export function getScholarship(scholarshipId) {
-  return withApiFallback(() => http.get(`/sms/scholarships/${scholarshipId}`), () =>
-    mock.getScholarship(scholarshipId),
-  )
+  return withApiData(() => http.get(`/sms/scholarships/${scholarshipId}`))
 }
 
 export function createScholarship(data) {
-  return withApiFallback(() => http.post('/sms/scholarships', data), () =>
-    mock.createScholarship(data),
-  )
+  return withApiData(() => http.post('/sms/scholarships', data))
 }
 
 export function updateScholarship(scholarshipId, data) {
-  return withApiFallback(() => http.put(`/sms/scholarships/${scholarshipId}`, data), () =>
-    mock.updateScholarship(scholarshipId, data),
-  )
+  return withApiData(() => http.put(`/sms/scholarships/${scholarshipId}`, data))
 }
 
 export function deleteScholarship(scholarshipId) {
-  return withApiFallback(() => http.delete(`/sms/scholarships/${scholarshipId}`), () =>
-    mock.deleteScholarship(scholarshipId),
-  )
+  return withApiData(() => http.delete(`/sms/scholarships/${scholarshipId}`))
 }
 
+// 分類／標籤建議清單；新分類與標籤會在獎學金存檔時由後端自動登記。
 export function getOptions(type) {
-  return withApiFallback(() => http.get('/sms/options', { params: type ? { type } : undefined }), () =>
-    mock.getOptions(type ? { type } : {})
-  )
-}
-
-export function createOption(data) {
-  return withApiFallback(() => http.post('/sms/options', data), () =>
-    mock.createOption(data)
-  )
-}
-
-export function updateOption(id, data) {
-  return withApiFallback(() => http.put(`/sms/options/${id}`, data), () =>
-    mock.updateOption(id, data)
-  )
-}
-
-export function deleteOption(id) {
-  return withApiFallback(() => http.delete(`/sms/options/${id}`), () =>
-    mock.deleteOption(id)
-  )
+  return withApiData(() => http.get('/sms/options', { params: type ? { type } : undefined }))
 }

@@ -2,17 +2,14 @@
 import { computed } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useToastStore } from '@/stores/toast'
-import { ROLE_LABELS } from '@/api/aas'
-import { useMockApi } from '@/api/http'
 import Icon from '@/components/common/Icon.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-const toast = useToastStore()
 
 const ALL_ROLES = ['STUDENT', 'TEACHER', 'SPONSOR', 'REVIEWER', 'ADMIN']
+const NON_ADMIN_ROLES = ALL_ROLES.filter((role) => role !== 'ADMIN')
 
 const navGroups = [
   {
@@ -74,19 +71,19 @@ const navGroups = [
       {
         label: '公告中心',
         to: '/announcements',
-        roles: ALL_ROLES,
+        roles: NON_ADMIN_ROLES,
         icon: 'archive',
       },
       {
         label: '通知中心',
         to: '/notifications',
-        roles: ALL_ROLES,
+        roles: NON_ADMIN_ROLES,
         icon: 'bell',
       },
       {
         label: '問題回報',
         to: '/issues',
-        roles: ALL_ROLES,
+        roles: NON_ADMIN_ROLES,
         icon: 'review',
       },
     ],
@@ -94,6 +91,12 @@ const navGroups = [
   {
     label: '系統管理',
     items: [
+      {
+        label: '單位管理',
+        to: '/admin/units',
+        roles: ['ADMIN'],
+        icon: 'building',
+      },
       {
         label: '帳號管理',
         to: '/admin/users',
@@ -136,6 +139,11 @@ const navGroups = [
 
 const currentRole = computed(() => auth.user?.role ?? auth.role)
 
+const isAdmin = computed(() => currentRole.value === 'ADMIN')
+
+// 管理員的「公告中心」與「公告管理」合併，快捷鈕直接導向公告管理頁面。
+const announcementsTo = computed(() => (isAdmin.value ? '/admin/announcements' : '/announcements'))
+
 const visibleGroups = computed(() =>
   navGroups
     .map((group) => ({
@@ -145,23 +153,9 @@ const visibleGroups = computed(() =>
     .filter((group) => group.items.length > 0),
 )
 
-const roleOptions = computed(() =>
-  Object.entries(ROLE_LABELS).map(([value, label]) => ({
-    value,
-    label,
-  })),
-)
-
-async function switchRole(event) {
-  if (!useMockApi) {
-    toast.info('真 API 模式不支援快速切換角色，請登出後以對應帳號登入。')
-    return
-  }
-
-  await auth.loginAs(event.target.value)
-  toast.info(`已切換為${auth.roleLabel}`)
-  router.push('/dashboard')
-}
+const pageShellClass = computed(() => ({
+  'page-shell--wide': route.meta.widePage,
+}))
 
 async function logout() {
   await auth.logout()
@@ -203,10 +197,6 @@ async function logout() {
           </div>
         </div>
       </nav>
-
-      <p v-if="useMockApi" class="sidebar__dev-note">
-        測試模式 · mock 後端運作中
-      </p>
     </aside>
 
     <div class="workspace">
@@ -217,19 +207,6 @@ async function logout() {
         </div>
 
         <div class="topbar__actions">
-          <label v-if="useMockApi" class="role-switcher dev-only">
-            <span>測試角色</span>
-            <select :value="auth.role" @change="switchRole">
-              <option
-                v-for="option in roleOptions"
-                :key="option.value"
-                :value="option.value"
-              >
-                {{ option.label }}
-              </option>
-            </select>
-          </label>
-
           <div class="user-chip">
             <strong>{{ auth.user?.name ?? '使用者' }}</strong>
             <span>{{ auth.roleLabel }}</span>
@@ -238,13 +215,14 @@ async function logout() {
           <button
             type="button"
             class="icon-button"
-            title="公告中心"
-            @click="router.push('/announcements')"
+            :title="isAdmin ? '公告管理' : '公告中心'"
+            @click="router.push(announcementsTo)"
           >
             <Icon name="archive" />
           </button>
 
           <button
+            v-if="!isAdmin"
             type="button"
             class="icon-button"
             title="通知中心"
@@ -260,10 +238,9 @@ async function logout() {
         </div>
       </header>
 
-      <main class="page-shell">
+      <main class="page-shell" :class="pageShellClass">
         <RouterView />
       </main>
     </div>
   </div>
 </template>
-```

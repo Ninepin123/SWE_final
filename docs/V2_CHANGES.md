@@ -18,14 +18,12 @@ v2 動到資料表結構：
 - 新表：`audit_logs`、`student_profiles`、`recommendations`、`notifications`、`announcements`（用 `CREATE TABLE IF NOT EXISTS`，全新建立沒問題）。
 - `applications` 多了 5 個欄位；`03_sas_tables.sql` 內含「若欄位不存在才補上」的相容語句，**舊資料庫也會自動補欄位**。
 
-若你之前**已經跑過 v1 的 `start.bat`**（資料庫已存在），直接再跑一次即可，腳本會自動補表/補欄位。萬一遇到欄位相關錯誤，最保險是把資料庫整個重建一次：在 MySQL 執行 `DROP DATABASE nuksams;` 後再跑 `start.bat`（會重新建立 + 重新載入種子資料）。
+若你之前**已經跑過 v1 的 `start.bat`**（資料庫已存在），直接再跑一次即可，腳本會自動補表/補欄位。萬一遇到欄位相關錯誤，最保險是把資料庫整個重建一次：在 MySQL 執行 `DROP DATABASE nuksams;` 後再跑 `start.bat`（只會重新建立 schema，不會載入假資料）。
 
-## 種子帳號（demo）
-沿用 v1：跑過一次後執行 `.venv\Scripts\python -m app.modules.aas.dev_seed`，密碼皆 `password123`：
-- `admin`（系統管理員）、`sponsor`（獎助單位）、`reviewer`（審查人員）、`teacher`（老師：陳老師）
-- `A1125529`（學生，GPA 3.85）、`A1125599`（學生，GPA 3.20）
+## 帳號與資料來源
+系統不再提供種子帳號或 demo 資料。若資料庫沒有任何 `ADMIN`，啟動腳本會建立必要的 bootstrap 管理員，預設帳號為 `admin`，密碼由 `BOOTSTRAP_ADMIN_PASSWORD` 設定控制。其餘獎助單位、審查人員、教師與學生帳號，以及獎學金資料，請由正式管理流程建立後再驗證。
 
-完整流程可測：以 `A1125529` 登入→申請獎學金→在「我的申請」邀請「陳老師」→改用 `teacher` 登入撰寫並送出推薦信→再用 `reviewer` 登入審查（可看到推薦信內容）→`A1125529` 會收到審查結果通知。
+完整流程可測：以正式學生帳號登入→申請獎學金→在「我的申請」邀請正式教師帳號→改用該教師帳號撰寫並送出推薦信→再用正式審查人員帳號審查（可看到推薦信內容）→學生會收到審查結果通知。
 
 ## 未在本次範圍
 檔案上傳/附件、忘記密碼、Email 實際寄送（NCS 目前為站內通知）。這些可留待後續版本。

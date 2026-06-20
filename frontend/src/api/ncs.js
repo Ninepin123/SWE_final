@@ -1,5 +1,4 @@
-import http, { withApiFallback } from './http'
-import * as mock from '@/services/mockBackend'
+import http, { withApiData } from './http'
 
 function toVariant(category) {
   const value = String(category ?? '').toUpperCase()
@@ -134,40 +133,29 @@ export function listNotifications(params = {}) {
     offset: params.offset ?? 0,
   }
 
-  return withApiFallback(
-    () => http.get('/ncs/notifications', { params: query }),
-    () => mock.listNotifications(params),
-  ).then((items) => (Array.isArray(items) ? items.map(normalizeNotification) : []))
+  return withApiData(() => http.get('/ncs/notifications', { params: query }))
+    .then((items) => (Array.isArray(items) ? items.map(normalizeNotification) : []))
 }
 
 export function getUnreadNotificationCount() {
-  return withApiFallback(
-    () => http.get('/ncs/notifications/unread-count'),
-    () => mock.getUnreadNotificationCount(),
-  ).then((payload) => payload?.unread_count ?? payload?.unreadCount ?? payload?.count ?? 0)
+  return withApiData(() => http.get('/ncs/notifications/unread-count'))
+    .then((payload) => payload?.unread_count ?? payload?.unreadCount ?? payload?.count ?? 0)
 }
 
 export function markNotificationRead(notificationId) {
-  return withApiFallback(
-    () => http.patch(`/ncs/notifications/${notificationId}/read`),
-    () => mock.markNotificationRead(notificationId),
-  ).then((item) => (item ? normalizeNotification(item) : null))
+  return withApiData(() => http.patch(`/ncs/notifications/${notificationId}/read`))
+    .then((item) => (item ? normalizeNotification(item) : null))
 }
 
 export function markAllNotificationsRead() {
-  return withApiFallback(
-    () => http.patch('/ncs/notifications/read-all'),
-    () => mock.markAllNotificationsRead(),
-  ).then((payload) => ({
+  return withApiData(() => http.patch('/ncs/notifications/read-all')).then((payload) => ({
     updatedCount: payload?.updated_count ?? payload?.updatedCount ?? 0,
   }))
 }
 
 export function createNotification(payload) {
-  return withApiFallback(
-    () => http.post('/ncs/notifications', payload),
-    () => mock.createNotification?.(payload) ?? null,
-  ).then((item) => (item ? normalizeNotification(item) : null))
+  return withApiData(() => http.post('/ncs/notifications', payload))
+    .then((item) => (item ? normalizeNotification(item) : null))
 }
 
 // -------------------------
@@ -175,38 +163,27 @@ export function createNotification(payload) {
 // -------------------------
 
 export function listAnnouncements() {
-  return withApiFallback(
-    () => http.get('/ncs/announcements'),
-    () => mock.listAnnouncements?.() ?? [],
-  ).then((items) => (Array.isArray(items) ? items.map(normalizeAnnouncement) : []))
+  return withApiData(() => http.get('/ncs/announcements'))
+    .then((items) => (Array.isArray(items) ? items.map(normalizeAnnouncement) : []))
 }
 
 export function listAdminAnnouncements() {
-  return withApiFallback(
-    () => http.get('/ncs/announcements/admin'),
-    () => mock.listAdminAnnouncements?.() ?? mock.listAnnouncements?.() ?? [],
-  ).then((items) => (Array.isArray(items) ? items.map(normalizeAnnouncement) : []))
+  return withApiData(() => http.get('/ncs/announcements/admin'))
+    .then((items) => (Array.isArray(items) ? items.map(normalizeAnnouncement) : []))
 }
 
 export function createAnnouncement(payload) {
-  return withApiFallback(
-    () => http.post('/ncs/announcements', toAnnouncementPayload(payload)),
-    () => mock.createAnnouncement?.(payload) ?? null,
-  ).then((item) => (item ? normalizeAnnouncement(item) : null))
+  return withApiData(() => http.post('/ncs/announcements', toAnnouncementPayload(payload)))
+    .then((item) => (item ? normalizeAnnouncement(item) : null))
 }
 
 export function updateAnnouncement(announcementId, payload) {
-  return withApiFallback(
-    () => http.put(`/ncs/announcements/${announcementId}`, toAnnouncementPayload(payload)),
-    () => mock.updateAnnouncement?.(announcementId, payload) ?? null,
-  ).then((item) => (item ? normalizeAnnouncement(item) : null))
+  return withApiData(() => http.put(`/ncs/announcements/${announcementId}`, toAnnouncementPayload(payload)))
+    .then((item) => (item ? normalizeAnnouncement(item) : null))
 }
 
 export function deleteAnnouncement(announcementId) {
-  return withApiFallback(
-    () => http.delete(`/ncs/announcements/${announcementId}`),
-    () => mock.deleteAnnouncement?.(announcementId) ?? true,
-  )
+  return withApiData(() => http.delete(`/ncs/announcements/${announcementId}`))
 }
 
 // -------------------------
@@ -214,14 +191,7 @@ export function deleteAnnouncement(announcementId) {
 // -------------------------
 
 export function runDeadlineReminders() {
-  return withApiFallback(
-    () => http.post('/ncs/deadline-reminders/run'),
-    () => mock.runDeadlineReminders?.() ?? {
-      checked_count: 0,
-      created_count: 0,
-      skipped_duplicate_count: 0,
-    },
-  ).then((payload) => ({
+  return withApiData(() => http.post('/ncs/deadline-reminders/run')).then((payload) => ({
     checkedCount: payload?.checked_count ?? payload?.checkedCount ?? 0,
     createdCount: payload?.created_count ?? payload?.createdCount ?? 0,
     skippedDuplicateCount: payload?.skipped_duplicate_count ?? payload?.skippedDuplicateCount ?? 0,
@@ -233,82 +203,53 @@ export function runDeadlineReminders() {
 // -------------------------
 
 export function listApplicationMessages(applicationId) {
-  return withApiFallback(
-    () => http.get(`/ncs/applications/${applicationId}/messages`),
-    () => mock.listApplicationMessages?.(applicationId) ?? [],
-  )
+  return withApiData(() => http.get(`/ncs/applications/${applicationId}/messages`))
 }
 
 export function createApplicationMessage(applicationId, body) {
-  return withApiFallback(
-    () => http.post(`/ncs/applications/${applicationId}/messages`, { body }),
-    () => mock.createApplicationMessage?.(applicationId, body) ?? null,
-  )
+  return withApiData(() => http.post(`/ncs/applications/${applicationId}/messages`, { body }))
 }
 
 export function createIssueReport(payload) {
-  return withApiFallback(
-    () => http.post('/ncs/issues', payload),
-    () => mock.createIssueReport?.(payload) ?? null,
-  ).then((item) => (item ? normalizeIssue(item) : null))
+  return withApiData(() => http.post('/ncs/issues', payload))
+    .then((item) => (item ? normalizeIssue(item) : null))
 }
 
 export function listMyIssues() {
-  return withApiFallback(
-    () => http.get('/ncs/issues/me'),
-    () => mock.listMyIssues?.() ?? [],
-  ).then((items) => (Array.isArray(items) ? items.map(normalizeIssue) : []))
+  return withApiData(() => http.get('/ncs/issues/me'))
+    .then((items) => (Array.isArray(items) ? items.map(normalizeIssue) : []))
 }
 
 export function listAllIssues() {
-  return withApiFallback(
-    () => http.get('/ncs/issues'),
-    () => mock.listAllIssues?.() ?? [],
-  ).then((items) => (Array.isArray(items) ? items.map(normalizeIssue) : []))
+  return withApiData(() => http.get('/ncs/issues'))
+    .then((items) => (Array.isArray(items) ? items.map(normalizeIssue) : []))
 }
 
 export function updateIssueReport(issueId, payload) {
-  return withApiFallback(
-    () => http.patch(`/ncs/issues/${issueId}`, payload),
-    () => mock.updateIssueReport?.(issueId, payload) ?? null,
-  ).then((item) => (item ? normalizeIssue(item) : null))
+  return withApiData(() => http.patch(`/ncs/issues/${issueId}`, payload))
+    .then((item) => (item ? normalizeIssue(item) : null))
 }
 
 export function createIssueReply(issueId, body) {
-  return withApiFallback(
-    () => http.post(`/ncs/issues/${issueId}/replies`, { body }),
-    () => mock.createIssueReply?.(issueId, body) ?? null,
-  ).then((item) => (item ? normalizeIssueReply(item) : null))
+  return withApiData(() => http.post(`/ncs/issues/${issueId}/replies`, { body }))
+    .then((item) => (item ? normalizeIssueReply(item) : null))
 }
 
 export function listIssueReplies(issueId) {
-  return withApiFallback(
-    () => http.get(`/ncs/issues/${issueId}/replies`),
-    () => mock.listIssueReplies?.(issueId) ?? [],
-  ).then((items) => (Array.isArray(items) ? items.map(normalizeIssueReply) : []))
+  return withApiData(() => http.get(`/ncs/issues/${issueId}/replies`))
+    .then((items) => (Array.isArray(items) ? items.map(normalizeIssueReply) : []))
 }
 
 // -------------------------
 // System alerts
 // -------------------------
 
-export function createSystemAlert(payload) {
-  return withApiFallback(
-    () => http.post('/ncs/system-alerts', payload),
-    () => mock.createSystemAlert?.(payload) ?? null,
-  ).then((item) => (item ? normalizeSystemAlert(item) : null))
-}
-
 export function listSystemAlerts() {
-  return withApiFallback(
-    () => http.get('/ncs/system-alerts'),
-    () => mock.listSystemAlerts?.() ?? [],
-  ).then((items) => (Array.isArray(items) ? items.map(normalizeSystemAlert) : []))
+  return withApiData(() => http.get('/ncs/system-alerts'))
+    .then((items) => (Array.isArray(items) ? items.map(normalizeSystemAlert) : []))
 }
 
 export function updateSystemAlert(alertId, payload) {
-  return withApiFallback(
-    () => http.patch(`/ncs/system-alerts/${alertId}`, payload),
-    () => mock.updateSystemAlert?.(alertId, payload) ?? null,
-  ).then((item) => (item ? normalizeSystemAlert(item) : null))
+  return withApiData(() => http.patch(`/ncs/system-alerts/${alertId}`, payload))
+    .then((item) => (item ? normalizeSystemAlert(item) : null))
 }

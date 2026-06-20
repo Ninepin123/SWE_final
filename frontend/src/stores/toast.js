@@ -20,6 +20,9 @@ export const useToastStore = defineStore('toast', {
     error(message) {
       this.push(message, 'danger')
     },
+    warning(message) {
+      this.push(message, 'warning')
+    },
     info(message) {
       this.push(message, 'info')
     },

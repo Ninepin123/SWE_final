@@ -9,8 +9,7 @@ from sqlalchemy import asc, case, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.aas import service as aas_service
-from app.modules.aas.models import Unit, User
-from app.modules.aas.security import hash_password
+from app.modules.aas.models import User
 from app.modules.ncs import service as ncs_service
 from app.modules.ras.models import Review
 from app.modules.sas.models import Application, ApplicationDocument, StudentProfile
@@ -23,7 +22,6 @@ PENDING_STATUSES = {"REQUESTED", "PENDING"}
 VALID_STATUSES = {"REQUESTED", "PENDING", "DRAFT", "SUBMITTED"}
 VALID_SORT_FIELDS = {"deadline", "submitted_at", "created_at", "student_name", "scholarship_name", "status"}
 VALID_ORDER = {"asc", "desc"}
-DEV_QUICK_LOGIN_TRS_ACCOUNT_PREFIX = "DEVTRS"
 TRS_REVIEWER_SUBMITTED_TITLE = "推薦信已提交"
 TRS_DUE_SOON_TITLE = "推薦信即將截止提醒"
 
@@ -133,101 +131,6 @@ def _due_soon_recommendation_rows(db: Session, now: datetime, upper_bound: datet
         )
         .order_by(Scholarship.deadline.asc(), Recommendation.rec_id.asc())
     ).all()
-
-
-def ensure_dev_teacher_recommendations(db: Session, teacher: User, count: int = 6) -> int:
-    """開發用：快速登入教師時，補齊可測試的推薦邀請資料。"""
-    if teacher.role != "TEACHER" or count <= 0:
-        return 0
-
-    now = datetime.now()
-    created_count = 0
-    for index in range(1, count + 1):
-        student_account = f"{DEV_QUICK_LOGIN_TRS_ACCOUNT_PREFIX}{index:02d}"
-        scholarship_name = f"TRS 快速測試獎學金 {index}"
-
-        student = db.scalar(select(User).where(User.account == student_account))
-        if student is None:
-            student = User(
-                account=student_account,
-                password=hash_password("password123"),
-                name=f"TRS 測試學生 {index}",
-                email=f"devtrs{index:02d}@nuk.edu.tw",
-                role="STUDENT",
-                department="資訊工程學系",
-                gpa=3.50,
-                status="ACTIVE",
-            )
-            db.add(student)
-            db.flush()
-
-        scholarship = db.scalar(select(Scholarship).where(Scholarship.name == scholarship_name))
-        if scholarship is None:
-            default_unit = db.scalar(select(Unit).order_by(Unit.unit_id.asc()))
-            if default_unit is None:
-                default_unit = Unit(name="TRS 開發測試單位", type="SCHOOL", contact_email="trs-dev@nuk.edu.tw")
-                db.add(default_unit)
-                db.flush()
-
-            sponsor = db.scalar(
-                select(User)
-                .where(User.role == "SPONSOR", User.status == "ACTIVE")
-                .order_by(User.user_id.asc())
-            )
-            scholarship = Scholarship(
-                unit_id=(sponsor.unit_id if sponsor and sponsor.unit_id else default_unit.unit_id),
-                name=scholarship_name,
-                year=now.year,
-                amount=12000 + (index * 500),
-                quota=10,
-                min_gpa=2.50,
-                category="SCHOOL",
-                description="開發模式快速登入測試資料。",
-                deadline=now + timedelta(days=3 + index),
-                status="OPEN",
-                created_by=sponsor.user_id if sponsor else teacher.user_id,
-            )
-            db.add(scholarship)
-            db.flush()
-
-        application = db.scalar(
-            select(Application).where(
-                Application.student_id == student.user_id,
-                Application.scholarship_id == scholarship.scholarship_id,
-            )
-        )
-        if application is None:
-            application = Application(
-                student_id=student.user_id,
-                scholarship_id=scholarship.scholarship_id,
-                status="UNDER_REVIEW",
-                statement="快速登入測試用申請案。",
-                submitted_at=now,
-            )
-            db.add(application)
-            db.flush()
-
-        existing_rec = db.scalar(
-            select(Recommendation).where(
-                Recommendation.application_id == application.application_id,
-                Recommendation.teacher_id == teacher.user_id,
-            )
-        )
-        if existing_rec is None:
-            db.add(
-                Recommendation(
-                    application_id=application.application_id,
-                    student_id=student.user_id,
-                    teacher_id=teacher.user_id,
-                    status="REQUESTED",
-                    content=None,
-                )
-            )
-            created_count += 1
-
-    if created_count:
-        db.commit()
-    return created_count
 
 
 def request_recommendation(db: Session, student: User, data: RecommendationRequestCreate) -> dict:

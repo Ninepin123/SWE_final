@@ -1,7 +1,7 @@
 """SMS — Pydantic schema。介面契約同步在 docs/API.md。"""
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 
@@ -18,6 +18,7 @@ class CriteriaSchema(BaseModel):
 class ScholarshipCreate(BaseModel):
     model_config = ConfigDict(populate_by_name=True, alias_generator=to_camel)
     name: str = Field(alias="title")
+    unit_id: int | None = None
     year: int = Field(default_factory=lambda: datetime.now().year)
     amount: int = 0
     quota: int = 1
@@ -40,6 +41,7 @@ class ScholarshipCreate(BaseModel):
 class ScholarshipUpdate(BaseModel):
     model_config = ConfigDict(populate_by_name=True, alias_generator=to_camel)
     name: str | None = Field(None, alias="title")
+    unit_id: int | None = None
     year: int | None = None
     amount: int | None = None
     quota: int | None = None
@@ -61,7 +63,7 @@ class ScholarshipUpdate(BaseModel):
 
 class ScholarshipOut(BaseModel):
     model_config = ConfigDict(populate_by_name=True, alias_generator=to_camel)
-    id: int = Field(alias="scholarshipId", validation_alias="scholarship_id")
+    id: int = Field(validation_alias=AliasChoices("id", "scholarship_id", "scholarshipId"))
     title: str = Field(validation_alias="name")
     year: int
     amount: int

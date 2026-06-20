@@ -6,7 +6,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import Icon from '@/components/common/Icon.vue'
-import { createUser, deleteUser, listUsers, ROLE_LABELS, updateUser } from '@/api/aas'
+import { createUser, deleteUser, listUnits, listUsers, ROLE_LABELS, UNIT_TYPE_LABELS, updateUser } from '@/api/aas'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
@@ -14,6 +14,7 @@ const auth = useAuthStore()
 const toast = useToastStore()
 const loading = ref(true)
 const users = ref([])
+const units = ref([])
 const keyword = ref('')
 const roleFilter = ref('')
 const statusFilter = ref('')
@@ -35,6 +36,10 @@ const form = reactive({
 
 const roleOptions = computed(() =>
   Object.entries(ROLE_LABELS),
+)
+
+const unitNameById = computed(() =>
+  Object.fromEntries(units.value.map((unit) => [unit.unit_id, unit.name])),
 )
 
 const filteredUsers = computed(() => {
@@ -104,7 +109,9 @@ function validate() {
 }
 
 async function reload() {
-  users.value = await listUsers()
+  const [userList, unitList] = await Promise.all([listUsers(), listUnits()])
+  users.value = userList
+  units.value = unitList
 }
 
 async function save() {
@@ -227,7 +234,7 @@ onMounted(async () => {
               <td>{{ user.name }}</td>
               <td>{{ ROLE_LABELS[user.role] }}</td>
               <td>
-                {{ user.department || user.unit || (user.unit_id ? `單位 #${user.unit_id}` : '—') }}
+                {{ user.unit_id ? (unitNameById[user.unit_id] || `單位 #${user.unit_id}`) : (user.department || '—') }}
               </td>
               <td><StatusBadge :value="user.status" /></td>
               <td>
@@ -287,8 +294,13 @@ onMounted(async () => {
       <p class="field-group__title">單位與狀態</p>
       <div class="form-grid">
         <label>
-          <span>單位 ID</span>
-          <input v-model="form.unit_id" min="1" type="number" />
+          <span>所屬單位</span>
+          <select v-model="form.unit_id">
+            <option value="">未綁定</option>
+            <option v-for="unit in units" :key="unit.unit_id" :value="unit.unit_id">
+              {{ unit.name }}（{{ UNIT_TYPE_LABELS[unit.type] ?? unit.type }}）
+            </option>
+          </select>
         </label>
         <label>
           <span>科系／部門</span>

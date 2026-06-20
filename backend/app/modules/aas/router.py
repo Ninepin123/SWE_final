@@ -8,19 +8,19 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.database import get_db
 from app.modules.aas import service
 from app.modules.aas.models import User
 from app.modules.aas.monitoring import build_metrics, metrics
-from app.modules.trs import service as trs_service
 from app.modules.aas.schemas import (
     AuditLogOut,
     LoginRequest,
     MonitoringMetricsOut,
-    RoleQuickLoginRequest,
     TeacherOut,
     TokenResponse,
+    UnitCreate,
+    UnitOut,
+    UnitUpdate,
     UserCreate,
     UserOut,
     UserUpdate,
@@ -28,7 +28,6 @@ from app.modules.aas.schemas import (
 from app.modules.aas.security import create_access_token, get_current_user, require_roles
 
 router = APIRouter(prefix="/api/aas", tags=["AAS 帳號與權限管理"])
-VALID_ROLES = {"STUDENT", "TEACHER", "SPONSOR", "REVIEWER", "ADMIN"}
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -41,25 +40,6 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         raise
     service.write_audit(db, user.user_id, "LOGIN_SUCCESS", "user", user.user_id, "登入成功")
     # AAS003：建立單一登入 session，將 jti 寫入 token；其他裝置先前的 token 立即失效。
-    jti = service.start_session(db, user)
-    token = create_access_token(user.user_id, user.role, jti=jti)
-    return TokenResponse(access_token=token, user=UserOut.model_validate(user))
-
-
-@router.post("/dev-login-as", response_model=TokenResponse)
-def dev_login_as(body: RoleQuickLoginRequest, db: Session = Depends(get_db)):
-    """開發用快速登入：依角色直接取得一個啟用中的帳號。"""
-    if not settings.enable_dev_quick_login:
-        raise HTTPException(status_code=404, detail="Not Found")
-
-    role = body.role.strip().upper()
-    if role not in VALID_ROLES:
-        raise HTTPException(status_code=400, detail="角色不存在")
-
-    user = service.get_active_user_by_role(db, role)
-    if role == "TEACHER":
-        trs_service.ensure_dev_teacher_recommendations(db, user, count=6)
-    service.write_audit(db, user.user_id, "DEV_QUICK_LOGIN", "user", user.user_id, f"開發快速登入（{role}）")
     jti = service.start_session(db, user)
     token = create_access_token(user.user_id, user.role, jti=jti)
     return TokenResponse(access_token=token, user=UserOut.model_validate(user))
@@ -81,6 +61,39 @@ def me(current: User = Depends(get_current_user)):
 def list_teachers(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """老師清單（給學生在邀請推薦時挑選）。"""
     return service.list_teachers(db)
+
+
+@router.get("/units", response_model=list[UnitOut])
+def list_units(
+    keyword: str | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """單位清單（任何登入者皆可讀，供帳號/獎學金的單位下拉使用）。"""
+    return service.list_units(db, keyword=keyword)
+
+
+@router.post("/units", response_model=UnitOut, status_code=status.HTTP_201_CREATED)
+def create_unit(body: UnitCreate, db: Session = Depends(get_db), current: User = Depends(require_roles("ADMIN"))):
+    unit = service.create_unit(db, body)
+    service.write_audit(db, current.user_id, "CREATE_UNIT", "unit", unit.unit_id, f"新增單位「{unit.name}」")
+    return unit
+
+
+@router.put("/units/{unit_id}", response_model=UnitOut)
+def update_unit(
+    unit_id: int, body: UnitUpdate, db: Session = Depends(get_db), current: User = Depends(require_roles("ADMIN"))
+):
+    unit = service.update_unit(db, unit_id, body)
+    service.write_audit(db, current.user_id, "UPDATE_UNIT", "unit", unit_id, f"修改單位「{unit.name}」")
+    return unit
+
+
+@router.delete("/units/{unit_id}")
+def delete_unit(unit_id: int, db: Session = Depends(get_db), current: User = Depends(require_roles("ADMIN"))):
+    service.delete_unit(db, unit_id)
+    service.write_audit(db, current.user_id, "DELETE_UNIT", "unit", unit_id, f"刪除單位 #{unit_id}")
+    return {"detail": "已刪除單位"}
 
 
 @router.get("/users", response_model=list[UserOut])
@@ -126,7 +139,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current: User = Dep
 
 @router.get("/audit-logs", response_model=list[AuditLogOut])
 def audit_logs(
-    actor_id: int | None = None,
+    actor_id: str | None = None,
     action: str | None = None,
     target_type: str | None = None,
     created_from: datetime | None = None,

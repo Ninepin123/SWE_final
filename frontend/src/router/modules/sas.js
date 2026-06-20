@@ -36,6 +36,7 @@ export default [
     meta: {
       title: '個人資料',
       roles: ['STUDENT'],
+      widePage: true,
     },
   },
 ]

@@ -87,9 +87,16 @@ onMounted(async () => {
   />
 
   <div v-else class="page-grid">
-    <BaseCard title="我的申請紀錄" eyebrow="Applications">
+    <BaseCard class="applications-record-card" title="我的申請紀錄" eyebrow="Applications">
       <div class="table-wrap">
-        <table class="data-table">
+        <table class="data-table application-record-table">
+          <colgroup>
+            <col class="application-record-table__name-col" />
+            <col class="application-record-table__date-col" />
+            <col class="application-record-table__date-col" />
+            <col class="application-record-table__status-col" />
+            <col class="application-record-table__action-col" />
+          </colgroup>
           <thead>
             <tr>
               <th>獎學金</th>
@@ -101,14 +108,18 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-for="application in applications" :key="application.application_id ?? application.id">
-              <td>
+              <td class="application-record-table__name-cell">
                 <strong>{{ application.scholarship_name ?? application.scholarship?.title }}</strong>
               </td>
-              <td>{{ formatDate(application.created_at ?? application.submittedAt) }}</td>
-              <td>{{ formatDate(application.submitted_at ?? application.submittedAt) }}</td>
-              <td><StatusBadge :value="application.status" /></td>
-              <td>
-                <div class="table-actions">
+              <td class="application-record-table__date-cell">
+                {{ formatDate(application.created_at ?? application.submittedAt) }}
+              </td>
+              <td class="application-record-table__date-cell">
+                {{ formatDate(application.submitted_at ?? application.submittedAt) }}
+              </td>
+              <td class="application-record-table__status-cell"><StatusBadge :value="application.status" /></td>
+              <td class="application-record-table__action-cell">
+                <div class="table-actions application-record-actions">
                   <button class="secondary-button" type="button" @click="openDetail(application)">
                     查看進度
                   </button>
@@ -182,3 +193,90 @@ onMounted(async () => {
     </div>
   </BaseModal>
 </template>
+
+<style scoped>
+.applications-record-card {
+  overflow: hidden;
+}
+
+.applications-record-card .table-wrap {
+  overflow-x: auto;
+}
+
+.application-record-table {
+  min-width: 900px;
+  table-layout: fixed;
+}
+
+.application-record-table__name-col {
+  width: auto;
+}
+
+.application-record-table__date-col {
+  width: 21%;
+}
+
+.application-record-table__status-col {
+  width: 10%;
+}
+
+.application-record-table__action-col {
+  width: 230px;
+}
+
+.application-record-table__name-cell strong {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.application-record-table__date-cell {
+  white-space: nowrap;
+}
+
+.application-record-table__status-cell {
+  padding-right: 18px;
+}
+
+.application-record-table__action-cell {
+  padding-left: 20px;
+}
+
+.application-record-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.application-record-actions .primary-button,
+.application-record-actions .secondary-button {
+  min-height: 36px;
+  padding: 7px 13px;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+@media (max-width: 760px) {
+  .application-record-table {
+    min-width: 780px;
+  }
+
+  .application-record-table__date-col {
+    width: 170px;
+  }
+
+  .application-record-table__status-col {
+    width: 96px;
+  }
+
+  .application-record-table__action-col {
+    width: 210px;
+  }
+
+  .application-record-table__action-cell {
+    padding-left: 14px;
+  }
+}
+</style>

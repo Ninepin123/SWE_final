@@ -13,24 +13,33 @@ import {
   updateScholarship,
   getOptions,
 } from '@/api/sms'
+import { listUnits, UNIT_TYPE_LABELS } from '@/api/aas'
 import { useToastStore } from '@/stores/toast'
+import { useAuthStore } from '@/stores/auth'
 
 const toast = useToastStore()
+const auth = useAuthStore()
 const loading = ref(true)
 const scholarships = ref([])
 const keyword = ref('')
 const showModal = ref(false)
 const editingId = ref(null)
-const error = ref('')
 const optionsList = ref([])
+const units = ref([])
 
 const categories = computed(() => optionsList.value.filter(o => o.type === 'CATEGORY'))
 const tagOptions = computed(() => optionsList.value.filter(o => o.type === 'TAG'))
 
+// 管理員可指定任一單位；獎助單位人員只能選自己所屬的單位。
+const selectableUnits = computed(() => {
+  if (auth.user?.role === 'ADMIN') return units.value
+  return units.value.filter((unit) => unit.unit_id === auth.user?.unit_id)
+})
+
 const form = reactive({
   title: '',
   category: '',
-  sponsor: '',
+  unitId: '',
   amount: 0,
   quota: 0,
   usedQuota: 0,
@@ -75,7 +84,7 @@ function resetForm() {
   Object.assign(form, {
     title: '',
     category: '',
-    sponsor: '',
+    unitId: auth.user?.role === 'ADMIN' ? '' : (auth.user?.unit_id ?? ''),
     amount: 0,
     quota: 0,
     usedQuota: 0,
@@ -99,7 +108,6 @@ function resetForm() {
     website: '',
   })
   editingId.value = null
-  error.value = ''
 }
 
 function openCreate() {
@@ -111,7 +119,7 @@ function openEdit(item) {
   Object.assign(form, {
     title: item.title,
     category: item.category,
-    sponsor: item.sponsor,
+    unitId: item.unitId ?? '',
     amount: item.amount,
     quota: item.quota,
     usedQuota: item.usedQuota,
@@ -135,29 +143,32 @@ function openEdit(item) {
     website: item.website ?? '',
   })
   editingId.value = item.id
-  error.value = ''
   showModal.value = true
 }
 
 function validate() {
-  error.value = ''
-  if (!form.title || !form.category || !form.sponsor || !form.deadline) {
-    error.value = '名稱、分類、贊助單位與截止日為必填。'
+  let message = ''
+  if (!form.title || !form.category || form.unitId === '' || !form.deadline) {
+    message = '名稱、分類、提供單位與截止日為必填。'
   } else if (Number(form.amount) < 0 || Number(form.quota) <= 0) {
-    error.value = '金額需大於等於 0，名額需大於 0。'
+    message = '金額需大於等於 0，名額需大於 0。'
   } else if (form.startDate && form.deadline && new Date(form.startDate) >= new Date(form.deadline)) {
-    error.value = '開始日必須早於截止日。'
+    message = '開始日必須早於截止日。'
   } else if (form.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail)) {
-    error.value = 'Email 格式不正確。'
+    message = 'Email 格式不正確。'
   }
-  return !error.value
+  if (message) {
+    toast.warning(message)
+    return false
+  }
+  return true
 }
 
 function payload() {
   return {
     title: form.title,
     category: form.category,
-    sponsor: form.sponsor,
+    unitId: form.unitId === '' ? null : Number(form.unitId),
     amount: Number(form.amount),
     quota: Number(form.quota),
     usedQuota: Number(form.usedQuota || 0),
@@ -187,10 +198,11 @@ function payload() {
 async function reload() {
   scholarships.value = await listScholarships()
   try {
-    const res = await getOptions()
-    optionsList.value = res
+    const [opts, unitList] = await Promise.all([getOptions(), listUnits()])
+    optionsList.value = opts
+    units.value = unitList
   } catch (err) {
-    console.error('Failed to fetch options', err)
+    console.error('Failed to fetch options/units', err)
   }
 }
 
@@ -207,7 +219,7 @@ async function save() {
     showModal.value = false
     await reload()
   } catch (saveError) {
-    error.value = saveError.message || '儲存失敗'
+    toast.error(saveError.message || '儲存失敗')
   }
 }
 
@@ -304,8 +316,6 @@ onMounted(async () => {
     width="880px"
     @close="showModal = false"
   >
-    <p v-if="error" class="form-error">{{ error }}</p>
-
     <div class="field-group">
       <p class="field-group__title">基本資料</p>
       <div class="form-grid">
@@ -315,14 +325,19 @@ onMounted(async () => {
         </label>
         <label>
           <span>分類</span>
-          <select v-model="form.category">
-            <option disabled value="">請選擇分類</option>
-            <option v-for="cat in categories" :key="cat.id" :value="cat.name">{{ cat.name }}</option>
-          </select>
+          <input v-model="form.category" type="text" list="category-suggestions" placeholder="選擇或輸入新分類" />
+          <datalist id="category-suggestions">
+            <option v-for="cat in categories" :key="cat.id" :value="cat.name"></option>
+          </datalist>
         </label>
         <label>
-          <span>贊助單位</span>
-          <input v-model="form.sponsor" type="text" />
+          <span>提供單位</span>
+          <select v-model="form.unitId">
+            <option disabled value="">請選擇單位</option>
+            <option v-for="unit in selectableUnits" :key="unit.unit_id" :value="unit.unit_id">
+              {{ unit.name }}（{{ UNIT_TYPE_LABELS[unit.type] ?? unit.type }}）
+            </option>
+          </select>
         </label>
         <label class="form-grid__wide">
           <span>說明</span>

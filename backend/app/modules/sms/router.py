@@ -29,7 +29,7 @@ def create_scholarship(
     body: ScholarshipCreate, db: Session = Depends(get_db), current: User = Depends(require_roles("SPONSOR", "ADMIN"))
 ):
     result = service.create_scholarship(db, body, current)
-    aas_service.write_audit(db, current.user_id, "CREATE_SCHOLARSHIP", "scholarship", result["scholarship_id"], f"新增獎學金「{result['name']}」")
+    aas_service.write_audit(db, current.user_id, "CREATE_SCHOLARSHIP", "scholarship", result["id"], f"新增獎學金「{result['title']}」")
     return result
 
 
@@ -41,7 +41,7 @@ def update_scholarship(
     current: User = Depends(require_roles("SPONSOR", "ADMIN")),
 ):
     result = service.update_scholarship(db, scholarship_id, body, current)
-    aas_service.write_audit(db, current.user_id, "UPDATE_SCHOLARSHIP", "scholarship", scholarship_id, f"修改獎學金「{result['name']}」")
+    aas_service.write_audit(db, current.user_id, "UPDATE_SCHOLARSHIP", "scholarship", scholarship_id, f"修改獎學金「{result['title']}」")
     return result
 
 

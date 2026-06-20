@@ -1,25 +1,20 @@
 // SAS 學生申請 — API 呼叫（負責人：填上姓名）
 // 對應後端 backend/app/modules/sas/router.py，路徑前綴 /api/sas
-import http, { useMockApi } from './http'
-import * as mock from '@/services/mockBackend'
+import http from './http'
 
-// 範例（骨架測試用，開發開始後可移除）：
 export function ping() {
   return http.get('/sas/ping')
 }
 
 export function getProfile(userId) {
-  if (useMockApi) return mock.getProfile(userId)
   return http.get('/sas/profile').then((response) => response.data)
 }
 
 export function updateProfile(userId, data) {
-  if (useMockApi) return mock.updateProfile(userId, data)
   return http.put('/sas/profile', data).then((response) => response.data)
 }
 
 export function listAvailableScholarships(studentId) {
-  if (useMockApi) return mock.listAvailableScholarships(studentId)
   return http.get('/sas/scholarships/available').then((response) =>
     response.data.map((item) => ({
       id: item.scholarship_id,
@@ -40,17 +35,26 @@ export function listAvailableScholarships(studentId) {
       alreadyApplied: item.already_applied,
       canApply: item.can_apply,
       ineligibilityReasons: item.ineligibility_reasons,
+      // 後端目前只提供科系限制字串，仍給齊 criteria 物件以符合前端契約，
+      // 避免畫面存取 item.criteria.* 時因 undefined 而整頁渲染崩潰。
+      criteria: {
+        departments:
+          item.department_limit && item.department_limit !== '不限科系'
+            ? [item.department_limit]
+            : [],
+        grades: [],
+        identities: [],
+        familyStatuses: [],
+      },
     })),
   )
 }
 
 export function listMyApplications(studentId) {
-  if (useMockApi) return mock.listApplicationsByStudent(studentId)
   return http.get('/sas/applications/me').then((response) => response.data)
 }
 
 export function getApplication(applicationId) {
-  if (useMockApi) return mock.getApplication(applicationId)
   return http.get(`/sas/applications/${applicationId}`).then((response) => response.data)
 }
 
@@ -70,7 +74,6 @@ export function listApplicationEvents(applicationId) {
 }
 
 export function createApplication(studentId, data) {
-  if (useMockApi) return mock.createApplication(studentId, data)
   return http.post('/sas/applications', data).then((response) => response.data)
 }
 

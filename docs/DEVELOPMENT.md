@@ -28,8 +28,9 @@
 4. 啟動 MySQL——第一次自動下載可攜版（約 230MB，只下載一次）並初始化，
    之後直接啟動在 port 3307；**全程不需要輸入任何密碼**
 5. 自動建庫並重跑 `database/` 全部 SQL 腳本，拿到別人最新的資料表
-6. `npm install`（`package.json` 有變動才重裝）
-7. 開視窗分別跑後端（:8000）與前端（:5173），並自動打開瀏覽器
+6. 若資料庫沒有任何管理員，建立一個必要的預設 ADMIN 帳號
+7. `npm install`（`package.json` 有變動才重裝）
+8. 開視窗分別跑後端（:8000）與前端（:5173），並自動打開瀏覽器
 
 前後端都支援熱重載——**改完程式存檔就能直接在瀏覽器測**，不用重啟。
 停止系統：關掉「前端」「後端」兩個視窗即可；「MySQL」視窗可以留著，
@@ -41,8 +42,11 @@
 驗證：瀏覽器開 <http://localhost:5173> 看到首頁、<http://localhost:8000/docs> 看到 Swagger、
 `GET http://localhost:8000/api/aas/ping` 回 `{"module":"aas","status":"ok"}` 即成功。
 
-> 因為 SQL 腳本每次啟動都會重跑，所有 schema/seed 都必須可重複執行
-> （`CREATE TABLE IF NOT EXISTS` / `INSERT IGNORE`），詳見 `database/README.md`。
+> 因為 SQL 腳本每次啟動都會重跑，所有 schema 都必須可重複執行
+> （例如 `CREATE TABLE IF NOT EXISTS`），詳見 `database/README.md`。專案不再提供或自動執行開發假資料 seed。
+
+預設管理員不是 demo/mock 資料，而是系統初始管理入口。預設帳號密碼由 `backend/.env` 控制：
+`BOOTSTRAP_ADMIN_ACCOUNT=admin`、`BOOTSTRAP_ADMIN_PASSWORD=ChangeMe!12345`。首次登入後請立即修改密碼，或在第一次啟動前先改 `.env`。
 
 ### 手動啟動（備用，macOS/Linux 或腳本出問題時）
 
@@ -56,7 +60,7 @@ cd SWE_final
 # (2) 初始化資料庫（依序執行，詳見 database/README.md）
 mysql -u root -p < database/schema/00_create_database.sql
 mysql -u root -p nuksams < database/schema/01_aas_tables.sql
-# ...依編號 02~06 全部執行，最後執行 seed/99_dev_seed.sql
+# ...依編號 02~06 全部執行；不需執行 seed
 
 # (3) 後端
 cd backend
@@ -64,6 +68,7 @@ python -m venv .venv
 .venv\Scripts\activate          # Windows（macOS/Linux: source .venv/bin/activate）
 pip install -r requirements.txt
 copy .env.example .env          # 再打開 .env 填本機 MySQL 帳密
+python -m app.modules.aas.bootstrap_admin
 uvicorn app.main:app --reload   # 跑在 http://localhost:8000
 
 # (4) 前端（另開一個終端機）

@@ -20,13 +20,4 @@ export default [
       roles: ['SPONSOR', 'ADMIN'],
     },
   },
-  {
-    path: '/admin/options',
-    name: 'sms-admin-options',
-    component: () => import('@/views/sms/CategoryTagManagementView.vue'),
-    meta: {
-      title: '分類與標籤管理',
-      roles: ['ADMIN'],
-    },
-  },
 ]

@@ -3,15 +3,12 @@ import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
-import { useMockApi } from '@/api/http'
 import Icon from '@/components/common/Icon.vue'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const toast = useToastStore()
-const isMock = useMockApi
-const showRoleHelper = import.meta.env.DEV || isMock
 
 const form = reactive({
   account: '',
@@ -20,57 +17,19 @@ const form = reactive({
 const loading = ref(false)
 const error = ref('')
 
-// 測試角色快速登入（僅 mock / 開發模式顯示）
-const roles = [
-  {
-    role: 'STUDENT',
-    title: '學生',
-    account: 'S1125501',
-    subtitle: '瀏覽獎學金、送出申請、追蹤狀態',
-    icon: 'graduation',
-  },
-  {
-    role: 'REVIEWER',
-    title: '審查人員',
-    account: 'R10001',
-    subtitle: '審查申請案、要求補件',
-    icon: 'review',
-  },
-  {
-    role: 'ADMIN',
-    title: '系統管理員',
-    account: 'admin',
-    subtitle: '維護帳號與獎學金資料',
-    icon: 'shield',
-  },
-  {
-    role: 'TEACHER',
-    title: '教師',
-    account: 'teacher',
-    subtitle: '接收邀請、撰寫推薦信',
-    icon: 'recommend',
-  },
-]
-
 async function login() {
   error.value = ''
   if (!form.account.trim()) {
     error.value = '請輸入帳號。'
     return
   }
+  if (!form.password) {
+    error.value = '請輸入密碼。'
+    return
+  }
   loading.value = true
   try {
-    // mock 階段：以帳號比對使用者；正式環境改為呼叫密碼驗證 API
-    if (isMock) {
-      const account = form.account.trim().toLowerCase()
-      const roleByAccount = roles.find((item) => item.account.toLowerCase() === account)?.role
-      if (!roleByAccount) {
-        throw new Error('查無此帳號，可改用下方測試角色快速登入。')
-      }
-      await auth.loginAs(roleByAccount)
-    } else {
-      await auth.login(form.account.trim(), form.password)
-    }
+    await auth.login(form.account.trim(), form.password)
     toast.success(`歡迎，${auth.user?.name}`)
     router.push(route.query.redirect || '/dashboard')
   } catch (loginError) {
@@ -80,19 +39,6 @@ async function login() {
   }
 }
 
-async function quickLogin(role) {
-  loading.value = true
-  error.value = ''
-  try {
-    await auth.loginAs(role)
-    toast.success(`已登入為${auth.roleLabel}`)
-    router.push(route.query.redirect || '/dashboard')
-  } catch (loginError) {
-    error.value = loginError.response?.data?.detail || loginError.message || '快速登入失敗'
-  } finally {
-    loading.value = false
-  }
-}
 </script>
 
 <template>
@@ -133,26 +79,6 @@ async function quickLogin(role) {
           {{ loading ? '登入中' : '登入' }}
         </button>
       </form>
-
-      <div v-if="showRoleHelper" class="login-divider dev-only">
-        測試角色快速登入
-      </div>
-
-      <div v-if="showRoleHelper" class="role-grid dev-only">
-        <button
-          v-for="item in roles"
-          :key="item.role"
-          type="button"
-          class="role-card"
-          :disabled="loading"
-          @click="quickLogin(item.role)"
-        >
-          <Icon :name="item.icon" />
-          <strong>{{ item.title }}</strong>
-          <small>{{ item.account }}</small>
-          <p>{{ item.subtitle }}</p>
-        </button>
-      </div>
     </section>
   </main>
 </template>

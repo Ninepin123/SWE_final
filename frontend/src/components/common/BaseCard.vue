@@ -1,7 +1,7 @@
 <template>
   <section class="card" :class="{ 'card--flush': flush }">
     <div v-if="$slots.header || title" class="card__header">
-      <div>
+      <div class="card__title-group">
         <p v-if="eyebrow" class="eyebrow">{{ eyebrow }}</p>
         <h2 v-if="title">{{ title }}</h2>
       </div>

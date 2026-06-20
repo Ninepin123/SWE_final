@@ -1,9 +1,7 @@
 // TRS 教師推薦 — API 呼叫（負責人：填上姓名）
 // 對應後端 backend/app/modules/trs/router.py，路徑前綴 /api/trs
-import http, { withApiFallback } from './http'
-import * as mock from '@/services/mockBackend'
+import http, { withApiData } from './http'
 
-// 範例（骨架測試用，開發開始後可移除）：
 export function ping() {
   return http.get('/trs/ping')
 }
@@ -125,62 +123,33 @@ export function listTeacherRecommendations(paramsOrRecommenderUserId, recommende
         sort_by: paramsOrRecommenderUserId.sortBy ?? undefined,
         order: paramsOrRecommenderUserId.order ?? undefined,
       }
-  const fallbackUserId = isLegacyCall ? paramsOrRecommenderUserId : recommenderUserId
-
-  return withApiFallback(
-    () => http.get('/trs/recommendations/teacher', { params }),
-    () => mock.listRecommendationRequests(fallbackUserId, params),
-  ).then((items) => (Array.isArray(items) ? items.map(normalizeRecommendation) : []))
+  return withApiData(() => http.get('/trs/recommendations/teacher', { params }))
+    .then((items) => (Array.isArray(items) ? items.map(normalizeRecommendation) : []))
 }
 
 export function saveRecommendationDraft(recId, content, recommenderUserId) {
-  return withApiFallback(
-    () => http.put(`/trs/recommendations/${recId}`, { content, submit: false }),
-    () => {
-      if (!recommenderUserId) {
-        throw new Error('mock 儲存草稿需要 recommenderUserId')
-      }
-      return mock.saveRecommendationDraft(recommenderUserId, recId, content)
-    },
-  ).then(normalizeRecommendation)
+  return withApiData(() => http.put(`/trs/recommendations/${recId}`, { content, submit: false }))
+    .then(normalizeRecommendation)
 }
 
 export function submitRecommendation(recId, content, recommenderUserId) {
-  return withApiFallback(
-    () => http.put(`/trs/recommendations/${recId}`, { content, submit: true }),
-    () => {
-      if (!recommenderUserId) {
-        throw new Error('mock 送出推薦信需要 recommenderUserId')
-      }
-      return mock.submitRecommendation(recommenderUserId, recId, content)
-    },
-  ).then(normalizeRecommendation)
+  return withApiData(() => http.put(`/trs/recommendations/${recId}`, { content, submit: true }))
+    .then(normalizeRecommendation)
 }
 
 export function listStudentRecommendationStatus() {
-  return withApiFallback(
-    () => http.get('/trs/recommendations/student'),
-    () => [],
-  ).then((items) => (Array.isArray(items) ? items.map(normalizeStudentRecommendationStatus) : []))
+  return withApiData(() => http.get('/trs/recommendations/student'))
+    .then((items) => (Array.isArray(items) ? items.map(normalizeStudentRecommendationStatus) : []))
 }
 
 export function getRecommendationStudentProfile(recId, recommenderUserId) {
-  return withApiFallback(
-    () => http.get(`/trs/recommendations/${recId}/student-profile`),
-    () => {
-      if (!recommenderUserId) {
-        throw new Error('mock 查看學生資料需要 recommenderUserId')
-      }
-      return mock.getRecommendationStudentProfile(recommenderUserId, recId)
-    },
-  ).then(normalizeRecommendationStudentProfile)
+  return withApiData(() => http.get(`/trs/recommendations/${recId}/student-profile`))
+    .then(normalizeRecommendationStudentProfile)
 }
 
 export function getTeacherRecommendationDashboard(recommenderUserId) {
-  return withApiFallback(
-    () => http.get('/trs/recommendations/teacher/dashboard'),
-    () => mock.getTeacherRecommendationDashboard(recommenderUserId),
-  ).then(normalizeRecommendationDashboard)
+  return withApiData(() => http.get('/trs/recommendations/teacher/dashboard'))
+    .then(normalizeRecommendationDashboard)
 }
 
 // backward compatibility for existing imports

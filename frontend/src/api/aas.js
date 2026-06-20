@@ -1,7 +1,6 @@
 // AAS 帳號與權限管理 — API 呼叫（負責人：填上姓名）
 // 對應後端 backend/app/modules/aas/router.py，路徑前綴 /api/aas
-import http, { useMockApi } from './http'
-import * as mock from '@/services/mockBackend'
+import http from './http'
 
 export const ROLE_LABELS = {
   STUDENT: '學生',
@@ -11,13 +10,18 @@ export const ROLE_LABELS = {
   ADMIN: '系統管理員',
 }
 
-// 範例（骨架測試用，開發開始後可移除）：
+export const UNIT_TYPE_LABELS = {
+  SCHOOL: '校內',
+  GOVERNMENT: '政府',
+  PRIVATE: '民間／企業',
+  OTHER: '其他',
+}
+
 export function ping() {
   return http.get('/aas/ping')
 }
 
 export function getMe() {
-  if (useMockApi) return mock.fetchMe()
   return http.get('/aas/me').then((response) => response.data)
 }
 
@@ -25,37 +29,42 @@ export function login(credentials) {
   return http.post('/aas/login', credentials).then((response) => response.data)
 }
 
-export function loginAs(role) {
-  if (useMockApi) return mock.loginAs(role)
-  return http.post('/aas/dev-login-as', { role }).then((response) => response.data)
-}
-
 export function logout() {
-  if (useMockApi) return mock.logout()
   return http.post('/aas/logout').then((response) => response.data)
 }
 
+export function listUnits(params) {
+  return http.get('/aas/units', { params }).then((response) => response.data)
+}
+
+export function createUnit(data) {
+  return http.post('/aas/units', data).then((response) => response.data)
+}
+
+export function updateUnit(unitId, data) {
+  return http.put(`/aas/units/${unitId}`, data).then((response) => response.data)
+}
+
+export function deleteUnit(unitId) {
+  return http.delete(`/aas/units/${unitId}`).then((response) => response.data)
+}
+
 export function listUsers(params) {
-  if (useMockApi) return mock.listUsers(params)
   return http.get('/aas/users', { params }).then((response) => response.data)
 }
 
 export function createUser(data) {
-  if (useMockApi) return mock.createUser(data)
   return http.post('/aas/users', data).then((response) => response.data)
 }
 
 export function updateUser(userId, data) {
-  if (useMockApi) return mock.updateUser(userId, data)
   return http.put(`/aas/users/${userId}`, data).then((response) => response.data)
 }
 
 export function deleteUser(userId) {
-  if (useMockApi) return mock.deleteUser(userId)
   return http.delete(`/aas/users/${userId}`).then((response) => response.data)
 }
 
 export function listAuditLogs(params) {
-  if (useMockApi) return Promise.resolve([])
   return http.get('/aas/audit-logs', { params }).then((response) => response.data)
 }
