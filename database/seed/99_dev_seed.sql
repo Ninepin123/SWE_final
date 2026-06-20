@@ -13,7 +13,16 @@ USE nuksams;
 -- TODO(AAS)
 
 -- ===== SMS：測試獎學金 =====
--- TODO(SMS)
+-- 植入預設分類
+INSERT IGNORE INTO scholarship_options (type, name) VALUES
+('CATEGORY', '校內獎學金'),
+('CATEGORY', '政府獎學金'),
+('CATEGORY', '企業贊助'),
+('CATEGORY', '清寒獎助'),
+('CATEGORY', '成績優良'),
+('CATEGORY', '其他'),
+('TAG', '急難救助'),
+('TAG', '限理工學院');
 
 -- ===== SAS：測試申請案 =====
 -- TODO(SAS)
