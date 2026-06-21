@@ -13,7 +13,8 @@ from app.modules.ncs import service as ncs_service
 from app.modules.ras.models import Review
 from app.modules.ras.schemas import ReviewDecision
 from app.modules.sas import service as sas_service
-from app.modules.sas.models import Application
+from app.modules.sas.models import Application, ApplicationDocument
+from app.modules.sas.schemas import SupplementRequestCreate
 from app.modules.sms.models import Scholarship
 from app.modules.trs import service as trs_service
 
@@ -57,19 +58,22 @@ def list_applications_for_review(db: Session, reviewer: User, scholarship_id: in
         
     rows = db.execute(stmt).all()
 
-    import json
-
     out: list[dict] = []
     for app, student_name, gpa, scholarship_name in rows:
         review_row = _latest_review(db, app.application_id)
         recs = trs_service.get_recommendations_for_reviewer(db, app.application_id, reviewer)
-        
-        docs = []
-        if app.documents:
-            try:
-                docs = json.loads(app.documents)
-            except json.JSONDecodeError:
-                pass
+
+        # 申請附件存於 application_documents（線上申請以文字內容代替實體附件）；
+        # 審查人員需看到完整文件內容（需求書 8.2.2）。
+        doc_rows = db.execute(
+            select(ApplicationDocument)
+            .where(ApplicationDocument.application_id == app.application_id)
+            .order_by(ApplicationDocument.document_id)
+        ).scalars().all()
+        docs = [
+            {"title": d.title, "document_type": d.document_type, "content_text": d.content_text}
+            for d in doc_rows
+        ]
 
         out.append({
             "application_id": app.application_id,
@@ -106,10 +110,22 @@ def decide(db: Session, reviewer: User, application_id: int, data: ReviewDecisio
         application_id=application_id, reviewer_id=reviewer.user_id, result=data.result, comment=data.comment
     )
     db.add(review)
-    sas_service.set_application_status(db, application_id, DECISION_TO_STATUS[data.result], commit=False)
-    if data.result == "NEED_SUPPLEMENT" and data.supplement_deadline:
+    if data.result == "NEED_SUPPLEMENT":
+        if data.supplement_deadline is None:
+            raise HTTPException(status_code=400, detail="請設定補件期限")
         app.supplement_deadline = data.supplement_deadline
-    db.commit()
+        sas_service.create_supplement_request(
+            db,
+            reviewer,
+            application_id,
+            SupplementRequestCreate(
+                required_items=(data.comment or "請補件"),
+                deadline=data.supplement_deadline,
+            ),
+        )
+    else:
+        sas_service.set_application_status(db, application_id, DECISION_TO_STATUS[data.result], commit=False)
+        db.commit()
     # 通知學生審查結果
     sch = db.get(Scholarship, app.scholarship_id)
     sch_name = sch.name if sch else "獎學金"

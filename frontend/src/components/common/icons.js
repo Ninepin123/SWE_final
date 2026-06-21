@@ -53,6 +53,10 @@ export const ICON_PATHS = {
     'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9v.01M9 12v.01M9 15v.01',
   refresh:
     'M3 2v6h6M21 12A9 9 0 0 0 6 5.3L3 8M21 22v-6h-6M3 12a9 9 0 0 0 15 6.7l3-2.7',
+  list:
+    'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
+  chart:
+    'M3 3v18h18M18 17V9M13 17V5M8 17v-3',
 }
 
 export const ICON_NAMES = Object.keys(ICON_PATHS)

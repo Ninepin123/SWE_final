@@ -98,6 +98,12 @@ const navGroups = [
         icon: 'building',
       },
       {
+        label: '科系與部門管理',
+        to: '/admin/departments',
+        roles: ['ADMIN'],
+        icon: 'graduation',
+      },
+      {
         label: '帳號管理',
         to: '/admin/users',
         roles: ['ADMIN'],

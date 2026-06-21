@@ -221,3 +221,45 @@ def test_non_student_cannot_query_available_scholarships(client, db_session):
 
     assert response.status_code == 403
     assert response.json()["detail"] == "權限不足"
+
+
+# SMS 以 JSON 陣列字串儲存 department_limit（複選科系的結果）；
+# 確認 SAS 資格判定能正確解析該格式，而不是把整段 JSON 當成單一科系名稱。
+def test_json_department_limit_is_parsed_for_eligibility(client, db_session):
+    unit = Unit(name="資訊學院", type="SCHOOL")
+    db_session.add(unit)
+    db_session.commit()
+    in_scope = create_user(db_session, "stuIn", department="資訊工程學系")
+    out_scope = create_user(db_session, "stuOut", department="電機工程學系")
+    create_scholarship(
+        db_session,
+        unit,
+        department_limit='["資訊工程學系","資訊管理學系"]',
+    )
+
+    in_resp = client.get("/api/sas/scholarships/available", headers=auth_headers(in_scope))
+    assert in_resp.status_code == 200
+    in_item = in_resp.json()[0]
+    assert in_item["can_apply"] is True
+    assert "科系不符合申請資格" not in in_item["ineligibility_reasons"]
+
+    out_resp = client.get("/api/sas/scholarships/available", headers=auth_headers(out_scope))
+    out_item = out_resp.json()[0]
+    assert "科系不符合申請資格" in out_item["ineligibility_reasons"]
+
+
+def test_unlimited_department_json_means_no_restriction(client, db_session):
+    """空陣列(NULL)或 ['不限科系'] 都代表不限科系，任何科系皆可申請。"""
+    unit = Unit(name="校務基金", type="SCHOOL")
+    db_session.add(unit)
+    db_session.commit()
+    student = create_user(db_session, "stuAny", department="哲學系")
+    # NULL（不限）
+    create_scholarship(db_session, unit, name="不限科系A", department_limit=None)
+    # 舊資料殘留的 ["不限科系"] 也要視為不限
+    create_scholarship(db_session, unit, name="不限科系B", department_limit='["不限科系"]')
+
+    resp = client.get("/api/sas/scholarships/available", headers=auth_headers(student))
+    assert resp.status_code == 200
+    for item in resp.json():
+        assert "科系不符合申請資格" not in item["ineligibility_reasons"]

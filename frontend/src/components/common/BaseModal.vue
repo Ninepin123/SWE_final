@@ -22,7 +22,7 @@ defineEmits(['close'])
 <template>
   <Teleport to="body">
     <div v-if="show" class="modal-backdrop" @mousedown.self="$emit('close')">
-      <section class="modal-panel" :style="{ maxWidth: width }">
+      <section class="modal-panel" :style="{ '--modal-width': width }">
         <header class="modal-panel__header">
           <h2>{{ title }}</h2>
           <button class="icon-button" type="button" aria-label="關閉" @click="$emit('close')">

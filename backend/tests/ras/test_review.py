@@ -264,6 +264,34 @@ def test_decide_reject_sets_status_rejected(client, db_session, scenario):
     assert db_session.get(Application, app_low.application_id).status == "REJECTED"
 
 
+def test_decide_need_supplement_creates_request(client, db_session, scenario):
+    app_high = scenario["app_high"]
+    deadline = (datetime.now() + timedelta(days=7)).isoformat()
+
+    r = client.post(
+        f"/api/ras/applications/{app_high.application_id}/decision",
+        json={
+            "result": "NEED_SUPPLEMENT",
+            "comment": "請補交財力證明",
+            "supplement_deadline": deadline,
+        },
+        headers=auth(scenario["reviewer_a"]),
+    )
+
+    assert r.status_code == 200
+    db_session.expire_all()
+    assert db_session.get(Application, app_high.application_id).status == "NEED_SUPPLEMENT"
+
+    request = db_session.scalar(
+        select(SupplementRequest).where(
+            SupplementRequest.application_id == app_high.application_id
+        )
+    )
+    assert request is not None
+    assert request.required_items == "請補交財力證明"
+    assert request.reviewer_id == scenario["reviewer_a"].user_id
+
+
 def test_decide_invalid_result_is_rejected(client, scenario):
     r = client.post(
         f"/api/ras/applications/{scenario['app_high'].application_id}/decision",

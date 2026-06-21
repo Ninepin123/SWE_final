@@ -139,6 +139,8 @@ def request_recommendation(db: Session, student: User, data: RecommendationReque
         raise HTTPException(status_code=404, detail="找不到申請案")
     if app.student_id != student.user_id:
         raise HTTPException(status_code=403, detail="只能為自己的申請邀請推薦")
+    if app.status != "DRAFT":
+        raise HTTPException(status_code=409, detail="推薦信邀請需在申請草稿階段完成")
     teacher = db.get(User, data.teacher_id)
     if teacher is None or teacher.role != "TEACHER":
         raise HTTPException(status_code=400, detail="指定的老師不存在")

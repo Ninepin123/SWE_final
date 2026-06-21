@@ -77,7 +77,7 @@
 - 依目前登入學生的 `department` 與 `gpa` 判斷資格。
 - Query：`keyword?`, `category?`, `department?`, `deadline_before?`, `eligible_only?`
 - Response：`ScholarshipEligibilityOut[]`
-- 每筆包含 `remaining_quota`, `already_applied`, `can_apply`, `ineligibility_reasons`。
+- 每筆包含 `remaining_quota`, `require_recommendation`, `already_applied`, `can_apply`, `ineligibility_reasons`。
 - 不可申請原因可能包含：未開放、已截止、名額已滿、GPA 未達、科系不符、資料不足或已申請。
 - 目前 SMS 尚未提供必要文件資料結構，因此 `required_documents` 暫時回傳空陣列。
 
@@ -91,7 +91,7 @@
 - Request：`{ statement?, contact_phone?, address?, household_status?, academic_note? }`
 
 ### POST /api/sas/applications/{id}/submit  （僅申請學生）
-- 正式送出草稿；重新檢查資格、期限、申請表必填欄位及至少一份文字文件。
+- 正式送出草稿；重新檢查資格、期限、申請表必填欄位、至少一份文字文件，以及需要推薦信時是否已先邀請老師。
 - 成功後狀態由 `DRAFT` 改為 `UNDER_REVIEW`，寫入 `submitted_at` 並發送通知。
 - 正式送出後不可再次修改或重複送出。
 
@@ -217,7 +217,7 @@
 - `POST .../decision` 會寫入審查紀錄並通知學生審查結果。
 
 ## TRS 教師推薦（新增實作）
-- **POST /api/trs/recommendations**（STUDENT）：`{ application_id, teacher_id }` 邀請老師；通知該老師。
+- **POST /api/trs/recommendations**（STUDENT）：`{ application_id, teacher_id }` 在申請草稿階段邀請老師；通知該老師。非 `DRAFT` 申請不可再新增推薦邀請。
 - **GET /api/trs/recommendations/student**（STUDENT）：自己各申請的推薦狀態（**不含內容**，隱私）。
 - **GET /api/trs/recommendations/teacher**（TEACHER）：被指派的推薦邀請（含內容）。
 - **PUT /api/trs/recommendations/{rec_id}**（TEACHER）：`{ content, submit }`，`submit=true` 送出（通知學生），否則存草稿。

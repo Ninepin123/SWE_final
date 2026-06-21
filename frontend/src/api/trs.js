@@ -142,6 +142,13 @@ export function listStudentRecommendationStatus() {
     .then((items) => (Array.isArray(items) ? items.map(normalizeStudentRecommendationStatus) : []))
 }
 
+// 學生為自己的申請邀請一位老師撰寫推薦信。
+export function requestRecommendation(applicationId, teacherId) {
+  return withApiData(() =>
+    http.post('/trs/recommendations', { application_id: applicationId, teacher_id: teacherId }),
+  )
+}
+
 export function getRecommendationStudentProfile(recId, recommenderUserId) {
   return withApiData(() => http.get(`/trs/recommendations/${recId}/student-profile`))
     .then(normalizeRecommendationStudentProfile)

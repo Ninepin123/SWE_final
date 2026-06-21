@@ -4,6 +4,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.core.email import send_email
 from app.modules.aas.models import User
 from app.modules.ncs.models import (
     Announcement,
@@ -57,7 +59,46 @@ def create_notification(
     if commit:
         db.commit()
         db.refresh(n)
+
+    # 站內通知建立後，best-effort 寄一封 email 給使用者。
+    # EMAIL_ENABLED=false（預設）時 send_email 直接回傳 DISABLED，零開銷。
+    _send_notification_email(db, user, title, body, commit=commit)
+
     return n
+
+
+def _send_notification_email(
+    db: Session,
+    user: User,
+    subject: str,
+    body: str | None,
+    commit: bool,
+) -> None:
+    """寄送通知 email 並寫入 email_logs（best-effort，不影響站內通知）。
+
+    寄信本身永遠不會 raise；這裡再包一層 try 確保連寫 log 失敗也不會
+    讓 create_notification 崩潰。commit=False 時不自行 commit，交給外層
+    批次流程一起送出，避免提前 commit 其他 pending 的通知。
+    """
+    if not settings.email_enabled:
+        return
+
+    to_email = getattr(user, "email", None)
+    try:
+        status_value, error = send_email(to_email or "", subject, body)
+        log = EmailLog(
+            user_id=user.user_id,
+            to_email=to_email,
+            subject=subject,
+            body=body,
+            status=status_value,
+            error_message=error,
+        )
+        db.add(log)
+        if commit:
+            db.commit()
+    except Exception:  # noqa: BLE001 - email log 失敗也不能拖垮通知
+        db.rollback() if commit else None
 
 
 def notification_exists(db: Session, user_id: int, title: str, body: str | None = None) -> bool:

@@ -30,6 +30,27 @@ class UnitUpdate(BaseModel):
     contact_email: str | None = None
 
 
+class DepartmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    department_id: int
+    name: str
+    college: str | None = None
+    category: str
+    created_at: datetime | None = None
+
+
+class DepartmentCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    college: str | None = None
+    category: str = "ACADEMIC"
+
+
+class DepartmentUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    college: str | None = None
+    category: str | None = None
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     user_id: int

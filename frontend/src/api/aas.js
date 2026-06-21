@@ -17,6 +17,11 @@ export const UNIT_TYPE_LABELS = {
   OTHER: '其他',
 }
 
+export const DEPARTMENT_CATEGORY_LABELS = {
+  ACADEMIC: '科系',
+  ADMIN: '行政部門',
+}
+
 export function ping() {
   return http.get('/aas/ping')
 }
@@ -49,6 +54,22 @@ export function deleteUnit(unitId) {
   return http.delete(`/aas/units/${unitId}`).then((response) => response.data)
 }
 
+export function listDepartments(params) {
+  return http.get('/aas/departments', { params }).then((response) => response.data)
+}
+
+export function createDepartment(data) {
+  return http.post('/aas/departments', data).then((response) => response.data)
+}
+
+export function updateDepartment(departmentId, data) {
+  return http.put(`/aas/departments/${departmentId}`, data).then((response) => response.data)
+}
+
+export function deleteDepartment(departmentId) {
+  return http.delete(`/aas/departments/${departmentId}`).then((response) => response.data)
+}
+
 export function listUsers(params) {
   return http.get('/aas/users', { params }).then((response) => response.data)
 }
@@ -67,4 +88,9 @@ export function deleteUser(userId) {
 
 export function listAuditLogs(params) {
   return http.get('/aas/audit-logs', { params }).then((response) => response.data)
+}
+
+// 老師清單（供學生邀請推薦時挑選）。
+export function listTeachers() {
+  return http.get('/aas/teachers').then((response) => response.data)
 }

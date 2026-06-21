@@ -18,5 +18,14 @@ class Settings(BaseSettings):
     bootstrap_admin_email: str | None = None
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # Email / SMTP 通知（預設關閉）。填好 Gmail 應用程式密碼並設 EMAIL_ENABLED=true
+    # 後，系統發站內通知時會同時寄一封 Gmail 給使用者。詳見 app/core/email.py。
+    email_enabled: bool = False
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+
 
 settings = Settings()

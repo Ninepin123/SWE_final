@@ -252,30 +252,35 @@ onMounted(loadIssues)
           class="issue-card"
           :class="{ 'issue-card--active': selectedIssue && issueIdOf(selectedIssue) === issueIdOf(issue) }"
         >
-          <div class="issue-card__header">
-            <div>
+          <div class="issue-card__top">
+            <div class="issue-card__content">
               <span class="issue-card__type">
                 {{ issueTypeLabels[issue.issue_type ?? issue.issueType] ?? issue.issue_type ?? issue.issueType }}
               </span>
               <h3>{{ issue.title }}</h3>
+              <p class="issue-card__description">
+                {{ issue.description }}
+              </p>
             </div>
 
-            <span class="status-badge">
-              {{ statusLabels[statusOf(issue)] ?? statusOf(issue) }}
-            </span>
+            <div class="issue-card__status">
+              <span class="status-badge">
+                {{ statusLabels[statusOf(issue)] ?? statusOf(issue) }}
+              </span>
+              <span>建立時間：{{ formatDate(issue.created_at ?? issue.createdAt) }}</span>
+            </div>
           </div>
 
-          <p class="issue-card__description">
-            {{ issue.description }}
-          </p>
+          <div class="issue-card__details">
+            <div>
+              <span class="issue-card__label">回報者 ID</span>
+              <strong>{{ reporterIdOf(issue) }}</strong>
+            </div>
 
-          <div class="issue-card__meta">
-            <span>回報者 ID：{{ reporterIdOf(issue) }}</span>
-            <span>建立時間：{{ formatDate(issue.created_at ?? issue.createdAt) }}</span>
-          </div>
-
-          <div v-if="issue.attachment_name || issue.attachmentName" class="issue-card__attachment">
-            附件：{{ issue.attachment_name ?? issue.attachmentName }}
+            <div v-if="issue.attachment_name || issue.attachmentName">
+              <span class="issue-card__label">附件</span>
+              <strong>{{ issue.attachment_name ?? issue.attachmentName }}</strong>
+            </div>
           </div>
 
           <div class="issue-card__actions">
@@ -356,6 +361,8 @@ onMounted(loadIssues)
 }
 
 .issue-card {
+  display: grid;
+  gap: 1.15rem;
   border: 1px solid transparent;
 }
 
@@ -363,30 +370,71 @@ onMounted(loadIssues)
   border-color: #2563eb;
 }
 
-.issue-card__header,
-.issue-card__meta,
-.issue-card__actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  align-items: center;
+.issue-card__top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, auto);
+  gap: 1.5rem;
+  align-items: start;
 }
 
-.issue-card__header h3 {
-  margin: 0.25rem 0 0;
+.issue-card__content {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.issue-card__content h3 {
+  margin: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .issue-card__type,
-.issue-card__meta,
-.issue-card__attachment {
+.issue-card__status,
+.issue-card__label {
   color: var(--color-text-muted, #64748b);
   font-size: 0.85rem;
 }
 
 .issue-card__description {
+  margin: 0;
   white-space: pre-wrap;
-  line-height: 1.6;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.issue-card__status {
+  display: grid;
+  justify-items: end;
+  gap: 0.65rem;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.issue-card__details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(211, 195, 165, 0.7);
+  border-radius: 0.75rem;
+  background: rgba(255, 253, 248, 0.72);
+}
+
+.issue-card__details > div {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.issue-card__details strong {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.issue-card__label {
+  font-weight: 600;
 }
 
 .status-badge {
@@ -398,12 +446,24 @@ onMounted(loadIssues)
   font-size: 0.85rem;
 }
 
+.issue-card__actions {
+  display: grid;
+  grid-template-columns: max-content minmax(220px, 1fr);
+  gap: 1rem;
+  align-items: center;
+}
+
 .issue-card__actions select,
 .reply-form textarea {
   border: 1px solid var(--color-border, #cbd5e1);
   border-radius: 0.75rem;
   padding: 0.65rem;
   font: inherit;
+  min-width: 0;
+}
+
+.issue-card__actions select {
+  width: 100%;
 }
 
 .reply-panel {
@@ -475,6 +535,16 @@ onMounted(loadIssues)
 @media (max-width: 960px) {
   .issue-layout {
     grid-template-columns: 1fr;
+  }
+
+  .issue-card__top,
+  .issue-card__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .issue-card__status {
+    justify-items: start;
+    text-align: left;
   }
 
   .reply-panel {

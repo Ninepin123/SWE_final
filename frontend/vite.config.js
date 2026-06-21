@@ -12,7 +12,8 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    // 預設 5173；若環境變數 PORT 有設（例如預覽工具指派的埠）則沿用，方便外部工具管理。
+    port: process.env.PORT ? Number(process.env.PORT) : 5173,
     proxy: {
       // 開發時把 /api 轉發到後端 FastAPI（http://localhost:8000），
       // 前端程式一律呼叫相對路徑 /api/...，不要寫死後端網址。

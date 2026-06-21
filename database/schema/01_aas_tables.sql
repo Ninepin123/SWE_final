@@ -65,6 +65,15 @@ PREPARE stmt FROM @sql_session_expires_at;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+-- 科系與部門（供帳號 / 獎學金資格的科系下拉與資格比對使用）
+CREATE TABLE IF NOT EXISTS departments (
+    department_id INT AUTO_INCREMENT PRIMARY KEY,
+    name          VARCHAR(100) NOT NULL UNIQUE,
+    college       VARCHAR(100) NULL,                                       -- 所屬學院（行政部門可留空）
+    category      ENUM('ACADEMIC','ADMIN') NOT NULL DEFAULT 'ACADEMIC',    -- ACADEMIC=科系 / ADMIN=行政部門
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 稽核紀錄（4.2.5 / NUKSAMS038）：記錄管理與審查等重要操作
 CREATE TABLE IF NOT EXISTS audit_logs (
     log_id      INT AUTO_INCREMENT PRIMARY KEY,

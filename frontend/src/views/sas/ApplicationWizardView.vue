@@ -16,6 +16,8 @@ import {
   submitApplication,
   updateApplication,
 } from '@/api/sas'
+import { listTeachers } from '@/api/aas'
+import { listStudentRecommendationStatus, requestRecommendation } from '@/api/trs'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
@@ -24,7 +26,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const toast = useToastStore()
 
-const steps = ['基本資料', '申請內容', '附件文件', '確認送出']
+const steps = ['基本資料', '申請內容', '附件文件', '推薦信邀請', '確認送出']
 const currentStep = ref(0)
 const loading = ref(true)
 const saving = ref(false)
@@ -33,6 +35,19 @@ const error = ref('')
 const scholarship = ref(null)
 const applicationId = ref(null)
 const existingSubmitted = ref(false)
+const teachers = ref([])
+const recommendations = ref([])
+const recommendationLoading = ref(false)
+const recommendationError = ref('')
+const inviteTeacherId = ref('')
+const invitingRecommendation = ref(false)
+
+const RECOMMENDATION_STATUS_LABEL = {
+  REQUESTED: '已邀請（等待老師撰寫）',
+  PENDING: '已邀請（等待老師撰寫）',
+  DRAFT: '老師撰寫中',
+  SUBMITTED: '已提交',
+}
 
 // 自動儲存草稿：使用者一邊填、系統一邊存，不需要手動按「儲存草稿」。
 const ready = ref(false)
@@ -65,6 +80,9 @@ const form = reactive({
 })
 
 const isDraft = computed(() => !!applicationId.value && !existingSubmitted.value)
+const requiresRecommendation = computed(() =>
+  Boolean(scholarship.value?.requireRecommendation ?? scholarship.value?.require_recommendation),
+)
 
 function applicationPayload() {
   return {
@@ -90,6 +108,8 @@ function validateStep(step = currentStep.value, { focusInvalidStep = false } = {
     !Object.values(form.documents).some((document) => document.content_text.trim())
   ) {
     error.value = '請至少填寫一份文字文件。'
+  } else if (step === 3 && requiresRecommendation.value && !recommendations.value.length) {
+    error.value = '此獎學金需要推薦信，請先邀請至少一位老師。'
   }
   if (error.value) {
     if (focusInvalidStep) currentStep.value = step
@@ -194,7 +214,7 @@ async function runAutoSave() {
 }
 
 async function submit() {
-  for (const step of [0, 1, 2]) {
+  for (const step of [0, 1, 2, 3]) {
     if (!validateStep(step, { focusInvalidStep: true })) return
   }
   if (!window.confirm('正式送出後將無法修改申請資料，確定送出嗎？')) return
@@ -211,6 +231,58 @@ async function submit() {
     toast.error(error.value)
   } finally {
     submitting.value = false
+  }
+}
+
+function recommendationStatusLabel(status) {
+  return RECOMMENDATION_STATUS_LABEL[status] || status
+}
+
+async function loadTeachers() {
+  try {
+    teachers.value = await listTeachers()
+  } catch (teacherError) {
+    recommendationError.value =
+      teacherError.response?.data?.detail || teacherError.message || '老師清單載入失敗'
+  }
+}
+
+async function loadRecommendations() {
+  if (!applicationId.value) {
+    recommendations.value = []
+    return
+  }
+  recommendationLoading.value = true
+  try {
+    const all = await listStudentRecommendationStatus()
+    recommendations.value = all.filter(
+      (rec) => String(rec.applicationId) === String(applicationId.value),
+    )
+  } catch (loadError) {
+    recommendationError.value =
+      loadError.response?.data?.detail || loadError.message || '推薦邀請狀態載入失敗'
+  } finally {
+    recommendationLoading.value = false
+  }
+}
+
+async function inviteRecommendation() {
+  if (!inviteTeacherId.value) return
+  invitingRecommendation.value = true
+  recommendationError.value = ''
+  try {
+    const saved = await persistDraft({ showSuccess: false })
+    if (!saved) return
+    await requestRecommendation(applicationId.value, Number(inviteTeacherId.value))
+    toast.success('已送出推薦邀請')
+    inviteTeacherId.value = ''
+    await loadRecommendations()
+  } catch (inviteError) {
+    recommendationError.value =
+      inviteError.response?.data?.detail || inviteError.message || '推薦邀請送出失敗'
+    toast.error(recommendationError.value)
+  } finally {
+    invitingRecommendation.value = false
   }
 }
 
@@ -251,6 +323,10 @@ onMounted(async () => {
       form.contact_phone = profile.contact_phone ?? profile.phone ?? ''
       form.address = profile.address ?? ''
     }
+    await Promise.all([
+      loadTeachers(),
+      applicationId.value ? loadRecommendations() : Promise.resolve(),
+    ])
   } catch (loadError) {
     error.value = loadError.response?.data?.detail || loadError.message || '申請資料載入失敗'
   } finally {
@@ -376,7 +452,52 @@ function formatSavedTime(value) {
       </div>
     </BaseCard>
 
-    <BaseCard v-if="currentStep === 3" title="確認送出">
+    <BaseCard v-if="currentStep === 3" title="推薦信邀請">
+      <p class="muted-text">
+        推薦信邀請需在申請草稿階段完成；送出邀請時會先建立或更新目前草稿。
+      </p>
+      <p v-if="recommendationError" class="form-error">{{ recommendationError }}</p>
+
+      <p v-if="recommendationLoading" class="muted-text">推薦邀請狀態載入中…</p>
+      <div v-else-if="recommendations.length" class="recommendation-list">
+        <article
+          v-for="rec in recommendations"
+          :key="rec.recId"
+          class="mini-panel rec-status-panel"
+        >
+          <div>
+            <strong>{{ rec.teacherName || '推薦老師' }}</strong>
+            <p class="muted-text">{{ recommendationStatusLabel(rec.status) }}</p>
+          </div>
+          <StatusBadge :value="rec.status" />
+        </article>
+      </div>
+      <p v-else class="muted-text">
+        {{ requiresRecommendation ? '此獎學金需要推薦信，請先邀請老師。' : '尚未邀請任何老師撰寫推薦信。' }}
+      </p>
+
+      <div class="rec-invite">
+        <label>
+          <span>邀請老師撰寫推薦信</span>
+          <select v-model="inviteTeacherId">
+            <option value="">請選擇老師</option>
+            <option v-for="teacher in teachers" :key="teacher.user_id" :value="teacher.user_id">
+              {{ teacher.name }}<template v-if="teacher.department"> · {{ teacher.department }}</template>
+            </option>
+          </select>
+        </label>
+        <button
+          class="primary-button"
+          type="button"
+          :disabled="!inviteTeacherId || invitingRecommendation || saving || submitting"
+          @click="inviteRecommendation"
+        >
+          {{ invitingRecommendation ? '送出中' : '送出邀請' }}
+        </button>
+      </div>
+    </BaseCard>
+
+    <BaseCard v-if="currentStep === 4" title="確認送出">
       <dl class="review-list application-review-list">
         <div>
           <dt>獎學金</dt>
@@ -403,6 +524,10 @@ function formatSavedTime(value) {
             }}
             份
           </dd>
+        </div>
+        <div>
+          <dt>推薦信邀請</dt>
+          <dd>{{ recommendations.length }} 位老師</dd>
         </div>
       </dl>
       <p class="muted-text">正式送出後不能再修改；若尚未完成，可以先儲存草稿。</p>
@@ -454,3 +579,26 @@ function formatSavedTime(value) {
     <RouterLink class="primary-button" to="/scholarships">回到獎學金列表</RouterLink>
   </EmptyState>
 </template>
+
+<style scoped>
+.rec-invite {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.rec-invite label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+@media (max-width: 760px) {
+  .rec-invite {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+</style>

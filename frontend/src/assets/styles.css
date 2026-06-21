@@ -1085,7 +1085,7 @@ dd {
 .modal-panel {
   display: flex;
   flex-direction: column;
-  width: min(100%, 720px);
+  width: min(100%, var(--modal-width, 720px));
   max-height: min(90vh, 900px);
   overflow: hidden;
   border-radius: var(--radius-lg);

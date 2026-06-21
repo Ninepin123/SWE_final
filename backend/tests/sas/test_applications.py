@@ -20,6 +20,7 @@ from app.modules.sas.models import (
 )
 from app.modules.sas.router import router
 from app.modules.sms.models import Scholarship
+from app.modules.trs.models import Recommendation
 
 
 @pytest.fixture()
@@ -42,6 +43,7 @@ def db_session():
             SupplementRequest.__table__,
             StudentProfile.__table__,
             Notification.__table__,
+            Recommendation.__table__,
         ],
     )
     session = TestingSession()
@@ -85,7 +87,7 @@ def create_student(db_session, account):
     return create_user(db_session, account)
 
 
-def create_scholarship(db_session, *, deadline=None):
+def create_scholarship(db_session, *, deadline=None, require_recommendation=False):
     unit = db_session.scalar(select(Unit).where(Unit.name == "學務處"))
     if unit is None:
         unit = Unit(name="學務處", type="SCHOOL")
@@ -102,6 +104,7 @@ def create_scholarship(db_session, *, deadline=None):
         category="MERIT",
         deadline=deadline or datetime.now() + timedelta(days=30),
         status="OPEN",
+        require_recommendation=require_recommendation,
     )
     db_session.add(scholarship)
     db_session.commit()
@@ -182,6 +185,54 @@ def test_student_can_create_update_and_submit_draft(client, db_session):
     )
     assert reviewer_notification is not None
     assert reviewer_notification.title == "收到新的獎學金申請"
+
+
+def test_required_recommendation_must_be_invited_before_submit(client, db_session):
+    student = create_student(db_session, "student-recommendation-required")
+    teacher = create_user(db_session, "teacher-recommendation-required", role="TEACHER")
+    scholarship = create_scholarship(db_session, require_recommendation=True)
+    create_response = client.post(
+        "/api/sas/applications",
+        headers=headers(student),
+        json=complete_payload(scholarship.scholarship_id),
+    )
+    application_id = create_response.json()["application_id"]
+    client.post(
+        f"/api/sas/applications/{application_id}/documents",
+        headers=headers(student),
+        json={
+            "document_type": "AUTOBIOGRAPHY",
+            "title": "自傳",
+            "content_text": "完整自傳內容",
+        },
+    )
+
+    missing_response = client.post(
+        f"/api/sas/applications/{application_id}/submit",
+        headers=headers(student),
+    )
+
+    assert missing_response.status_code == 400
+    assert "推薦信" in missing_response.json()["detail"]
+    assert db_session.get(Application, application_id).status == "DRAFT"
+
+    db_session.add(
+        Recommendation(
+            application_id=application_id,
+            student_id=student.user_id,
+            teacher_id=teacher.user_id,
+            status="REQUESTED",
+        )
+    )
+    db_session.commit()
+
+    submit_response = client.post(
+        f"/api/sas/applications/{application_id}/submit",
+        headers=headers(student),
+    )
+
+    assert submit_response.status_code == 200
+    assert submit_response.json()["status"] == "UNDER_REVIEW"
 
 
 def test_incomplete_draft_cannot_be_submitted(client, db_session):

@@ -216,9 +216,9 @@ onMounted(async () => {
             <dt>GPA 門檻</dt>
             <dd>{{ item.minGpa ?? '不限' }}</dd>
           </div>
-          <div v-if="item.criteria?.departments?.length && item.criteria.departments[0] !== '不限科系'">
+          <div v-if="item.criteria?.departments?.length">
             <dt>適用科系</dt>
-            <dd>{{ item.departmentLimit || '不限科系' }}</dd>
+            <dd>{{ item.departmentLimit || item.criteria.departments.join('、') }}</dd>
           </div>
           <div v-if="item.criteria?.grades?.length">
             <dt>適用年級</dt>

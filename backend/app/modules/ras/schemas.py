@@ -18,6 +18,12 @@ class ReviewRecommendation(BaseModel):
     content_available: bool = False
 
 
+class ReviewDocument(BaseModel):
+    title: str
+    document_type: str | None = None
+    content_text: str | None = None
+
+
 class ReviewApplicationOut(BaseModel):
     application_id: int
     student_id: int
@@ -33,7 +39,7 @@ class ReviewApplicationOut(BaseModel):
     address: str | None = None
     household_status: str | None = None
     academic_note: str | None = None
-    documents: list[str] = []
+    documents: list[ReviewDocument] = []
     created_at: datetime
     # 最近一次審查紀錄（item 6：審查人員/結果/時間/意見）
     reviewer_name: str | None = None

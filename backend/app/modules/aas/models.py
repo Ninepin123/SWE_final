@@ -17,6 +17,16 @@ class Unit(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+class Department(Base):
+    __tablename__ = "departments"
+
+    department_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    college: Mapped[str | None] = mapped_column(String(100))
+    category: Mapped[str] = mapped_column(String(20), nullable=False, default="ACADEMIC")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class User(Base):
     __tablename__ = "users"
 

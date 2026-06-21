@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import BaseCard from '@/components/common/BaseCard.vue'
 import BaseModal from '@/components/common/BaseModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -36,6 +36,7 @@ const studentProfile = ref(null)
 const studentProfileLoading = ref(false)
 const studentProfileError = ref('')
 const studentProfileOpen = ref(false)
+const accordionRef = ref(null)
 const filters = reactive({
   keyword: '',
   status: '',
@@ -73,17 +74,15 @@ async function reload() {
     sortBy: filters.sortBy,
     order: filters.order,
   }, currentUserId.value)
-  if (!requests.value.length) {
+  // 預設全部摺疊：僅在先前已展開的案件仍存在時，才保留其展開狀態
+  const active = requests.value.find((item) => item.id === previousId)
+  if (active) {
+    selectedId.value = active.id
+    content.value = active.content || ''
+  } else {
     selectedId.value = null
     content.value = ''
-    return
   }
-
-  const active =
-    requests.value.find((item) => item.id === previousId) ??
-    requests.value[0]
-  selectedId.value = active.id
-  content.value = active.content || ''
 }
 
 async function reloadDashboard() {
@@ -125,10 +124,35 @@ function toggleSortOrder() {
   filters.order = filters.order === 'asc' ? 'desc' : 'asc'
 }
 
-function choose(request) {
-  selectedId.value = request.id
-  content.value = request.content || ''
+function toggle(request) {
+  if (selectedId.value === request.id) {
+    // 點擊已展開的案件 → 摺疊回去
+    selectedId.value = null
+    content.value = ''
+  } else {
+    selectedId.value = request.id
+    content.value = request.content || ''
+  }
   error.value = ''
+}
+
+function collapse() {
+  selectedId.value = null
+  content.value = ''
+  error.value = ''
+}
+
+function handleOutsideClick(event) {
+  if (!selectedId.value) {
+    return
+  }
+  // 學生資料彈窗開啟時，點擊彈窗不應收合下方案件
+  if (studentProfileOpen.value) {
+    return
+  }
+  if (accordionRef.value && !accordionRef.value.contains(event.target)) {
+    collapse()
+  }
 }
 
 async function openStudentProfile() {
@@ -215,11 +239,16 @@ async function submit() {
 }
 
 onMounted(async () => {
+  document.addEventListener('mousedown', handleOutsideClick)
   try {
     await safeReload()
   } finally {
     loading.value = false
   }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', handleOutsideClick)
 })
 </script>
 
@@ -227,22 +256,23 @@ onMounted(async () => {
   <LoadingSkeleton v-if="loading" :rows="4" />
 
   <div v-else class="page-grid">
-    <section class="stat-grid">
-      <BaseCard v-for="stat in dashboardStats" :key="stat.label" class="stat-card">
+    <section class="stat-grid stat-grid--compact">
+      <BaseCard v-for="stat in dashboardStats" :key="stat.label" class="stat-card stat-card--compact">
         <span>{{ stat.label }}</span>
         <strong>{{ stat.value }}</strong>
         <small class="muted-text">{{ stat.description }}</small>
       </BaseCard>
     </section>
 
-    <BaseCard title="搜尋與篩選" eyebrow="Filters">
-      <div class="form-grid">
-        <label class="form-grid__wide">
+    <BaseCard title="推薦邀請" eyebrow="Requests">
+      <div class="list-filters">
+        <label class="list-filters__search">
           <span>搜尋</span>
           <input
             v-model="filters.keyword"
             type="search"
             placeholder="搜尋學生姓名、學號或獎學金"
+            @keyup.enter="search"
           />
         </label>
         <label>
@@ -281,100 +311,109 @@ onMounted(async () => {
             </button>
           </div>
         </label>
+        <div class="list-filters__actions">
+          <button class="primary-button" type="button" @click="search">搜尋</button>
+          <button class="secondary-button" type="button" @click="resetFilters">清除條件</button>
+        </div>
       </div>
-      <div class="form-actions">
-        <button class="primary-button" type="button" @click="search">搜尋</button>
-        <button class="secondary-button" type="button" @click="resetFilters">清除條件</button>
-      </div>
-    </BaseCard>
 
-    <EmptyState
-      v-if="!requests.length"
-      :title="loadError ? '載入失敗' : '目前沒有符合條件的推薦案件'"
-      :description="loadError || '請調整搜尋、篩選條件，或等待學生送出推薦邀請。'"
-      icon="recommend"
-    />
-
-    <div v-else class="split-layout">
-    <BaseCard title="推薦邀請" eyebrow="Requests">
-      <div class="request-list">
-        <button
+      <div v-if="requests.length" ref="accordionRef" class="rec-accordion">
+        <article
           v-for="request in requests"
           :key="request.id"
-          type="button"
-          class="request-item"
-          :class="{ 'request-item--active': request.id === selectedId }"
-          @click="choose(request)"
+          class="rec-item"
+          :class="{ 'rec-item--open': request.id === selectedId }"
         >
-          <span>{{ request.studentName || '-' }}</span>
-          <small>{{ request.studentAccount || '—' }}</small>
-          <strong>{{ request.scholarshipName || '-' }}</strong>
-          <small>截止日 {{ formatDate(request.deadline) }}</small>
-          <small>{{ request.content?.trim() ? '已有草稿' : '尚未撰寫' }}</small>
-          <StatusBadge :value="request.status" />
-        </button>
+          <button
+            type="button"
+            class="rec-item__header"
+            :aria-expanded="request.id === selectedId"
+            @click="toggle(request)"
+          >
+            <span class="rec-item__summary">
+              <span class="rec-item__name">{{ request.studentName || '-' }}</span>
+              <small>{{ request.studentAccount || '—' }}</small>
+              <strong>{{ request.scholarshipName || '-' }}</strong>
+              <small>截止日 {{ formatDate(request.deadline) }}</small>
+              <small>{{ request.content?.trim() ? '已有草稿' : '尚未撰寫' }}</small>
+            </span>
+            <span class="rec-item__meta">
+              <StatusBadge :value="request.status" />
+              <span class="rec-item__chevron" aria-hidden="true">
+                {{ request.id === selectedId ? '▲' : '▼' }}
+              </span>
+            </span>
+          </button>
+
+          <div v-if="request.id === selectedId" class="rec-item__body">
+            <div class="rec-item__body-head">
+              <p class="rec-item__body-eyebrow">Recommendation Letter</p>
+              <h3 class="rec-item__body-title">填寫推薦內容</h3>
+              <button class="secondary-button" type="button" @click="openStudentProfile">
+                查看學生資料
+              </button>
+            </div>
+
+            <dl class="review-list">
+              <div>
+                <dt>學生</dt>
+                <dd>{{ request.studentName || '-' }}</dd>
+              </div>
+              <div>
+                <dt>獎學金</dt>
+                <dd>{{ request.scholarshipName || '-' }}</dd>
+              </div>
+              <div>
+                <dt>截止日期</dt>
+                <dd>{{ formatDate(request.deadline) }}</dd>
+              </div>
+              <div>
+                <dt>推薦狀態</dt>
+                <dd><StatusBadge :value="request.status" /></dd>
+              </div>
+            </dl>
+
+            <p v-if="error" class="form-error">{{ error }}</p>
+            <label class="stacked-field">
+              <span>推薦內容</span>
+              <textarea
+                v-model="content"
+                :readonly="isSubmitted"
+                :disabled="isSubmitted || saving"
+                rows="10"
+                placeholder="請描述學生的學習表現、專業能力、品格與推薦理由"
+              />
+            </label>
+
+            <div class="form-actions">
+              <button
+                v-if="!isSubmitted"
+                class="secondary-button"
+                type="button"
+                :disabled="saving"
+                @click="saveDraft"
+              >
+                {{ saving ? '處理中...' : '儲存草稿' }}
+              </button>
+              <button
+                class="primary-button"
+                type="button"
+                :disabled="isSubmitted || saving"
+                @click="submit"
+              >
+                {{ isSubmitted ? '已送出' : saving ? '處理中...' : '提交推薦信' }}
+              </button>
+            </div>
+          </div>
+        </article>
       </div>
+      <EmptyState
+        v-else
+        :title="loadError ? '載入失敗' : '目前沒有符合條件的推薦案件'"
+        :description="loadError || '請調整搜尋、篩選條件，或等待學生送出推薦邀請。'"
+        icon="recommend"
+      />
     </BaseCard>
-
-    <BaseCard v-if="selected" title="填寫推薦內容" eyebrow="Recommendation Letter">
-      <template #actions>
-        <button class="secondary-button" type="button" @click="openStudentProfile">
-          查看學生資料
-        </button>
-      </template>
-
-      <dl class="review-list">
-        <div>
-          <dt>學生</dt>
-          <dd>{{ selected.studentName || '-' }}</dd>
-        </div>
-        <div>
-          <dt>獎學金</dt>
-          <dd>{{ selected.scholarshipName || '-' }}</dd>
-        </div>
-        <div>
-          <dt>截止日期</dt>
-          <dd>{{ formatDate(selected.deadline) }}</dd>
-        </div>
-        <div>
-          <dt>推薦狀態</dt>
-          <dd><StatusBadge :value="selected.status" /></dd>
-        </div>
-      </dl>
-
-      <p v-if="error" class="form-error">{{ error }}</p>
-      <label class="stacked-field">
-        <span>推薦內容</span>
-        <textarea
-          v-model="content"
-          :readonly="isSubmitted"
-          :disabled="isSubmitted || saving"
-          rows="10"
-          placeholder="請描述學生的學習表現、專業能力、品格與推薦理由"
-        />
-      </label>
-
-      <div class="form-actions">
-        <button
-          v-if="!isSubmitted"
-          class="secondary-button"
-          type="button"
-          :disabled="saving"
-          @click="saveDraft"
-        >
-          {{ saving ? '處理中...' : '儲存草稿' }}
-        </button>
-        <button
-          class="primary-button"
-          type="button"
-          :disabled="isSubmitted || saving"
-          @click="submit"
-        >
-          {{ isSubmitted ? '已送出' : saving ? '處理中...' : '提交推薦信' }}
-        </button>
-      </div>
-    </BaseCard>
-    </div>
   </div>
 
   <BaseModal
@@ -392,7 +431,7 @@ onMounted(async () => {
       icon="recommend"
     />
 
-    <div v-else-if="studentProfile" class="detail-grid">
+    <div v-else-if="studentProfile" class="detail-grid student-profile-detail">
       <section>
         <h3>學生基本資料</h3>
         <dl class="review-list">
@@ -495,6 +534,179 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* 上方統計卡：縮小成小塊一覽 */
+.stat-grid--compact {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.stat-card--compact {
+  min-height: auto;
+  padding: 12px 14px;
+  gap: 2px;
+}
+
+.stat-card--compact span {
+  font-size: 12px;
+}
+
+.stat-card--compact strong {
+  font-size: 24px;
+}
+
+.stat-card--compact small {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.student-profile-detail .review-list {
+  overflow: visible;
+}
+
+.student-profile-detail .review-list > div {
+  grid-template-columns: minmax(128px, max-content) minmax(0, 1fr);
+  align-items: start;
+}
+
+.student-profile-detail .review-list dt {
+  padding-left: 1px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+/* 推薦案件改為手風琴：預設摺疊，點擊展開填寫區，點擊其他處收合 */
+.rec-accordion {
+  display: grid;
+  gap: 12px;
+}
+
+.rec-item {
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  background: #fffefa;
+  overflow: hidden;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.rec-item--open {
+  border-color: rgba(31, 92, 64, 0.45);
+  box-shadow: 0 12px 26px rgba(31, 92, 64, 0.12);
+}
+
+.rec-item__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 14px 18px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.rec-item__header:hover {
+  background: rgba(31, 92, 64, 0.04);
+}
+
+.rec-item__summary {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rec-item__name {
+  font-weight: 600;
+}
+
+.rec-item__summary strong {
+  font-size: 15px;
+}
+
+.rec-item__summary small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.rec-item__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.rec-item__chevron {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.rec-item__body {
+  padding: 4px 18px 20px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 16px;
+}
+
+.rec-item__body-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-top: 16px;
+}
+
+.rec-item__body-eyebrow {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.rec-item__body-title {
+  margin: 0;
+  margin-right: auto;
+  font-size: 18px;
+}
+
+.list-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.list-filters label {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 150px;
+}
+
+.list-filters label span {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.list-filters__search {
+  flex: 2 1 220px;
+}
+
+.list-filters__actions {
+  display: flex;
+  gap: 8px;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
 .sort-indicator {
   display: block;
 }
@@ -506,10 +718,10 @@ onMounted(async () => {
   gap: 0.375rem;
   width: 100%;
   min-height: 2.5rem;
-  border: 1px solid #8ea899;
+  border: 1px solid rgba(211, 195, 165, 0.95);
   border-radius: 0.75rem;
-  background: #eef4ed;
-  color: #1f2a21;
+  background: #fffefa;
+  color: var(--text);
   font-weight: 700;
   cursor: pointer;
   transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease, color 140ms ease;
@@ -517,19 +729,21 @@ onMounted(async () => {
 
 .sort-indicator__button:hover {
   transform: translateY(-1px);
-  border-color: #5f7f6e;
-  background: #e5efe4;
+  border-color: rgba(168, 121, 42, 0.52);
+  background: #fff8ea;
+  color: #745019;
 }
 
 .sort-indicator__button--asc,
 .sort-indicator__button--desc {
-  color: white;
-  border-color: #2f5e45;
-  background: linear-gradient(135deg, #3a7154, #2f5e45);
-  box-shadow: 0 8px 20px rgba(47, 94, 69, 0.24);
+  color: #745019;
+  border-color: rgba(168, 121, 42, 0.45);
+  background: linear-gradient(135deg, #fffdf8, #f7ecd2);
+  box-shadow: 0 8px 18px rgba(168, 121, 42, 0.14);
 }
 
 .sort-indicator__arrow {
+  color: var(--gold);
   font-size: 0.9rem;
   line-height: 1;
 }

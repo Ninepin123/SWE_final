@@ -63,7 +63,7 @@ def list_options(type: str | None = None, db: Session = Depends(get_db), _: User
 
 @router.post("/options", response_model=OptionOut, status_code=status.HTTP_201_CREATED)
 def create_option(
-    body: OptionCreate, db: Session = Depends(get_db), current: User = Depends(require_roles("ADMIN"))
+    body: OptionCreate, db: Session = Depends(get_db), current: User = Depends(require_roles("SPONSOR", "ADMIN"))
 ):
     result = service.create_option(db, body)
     aas_service.write_audit(db, current.user_id, "CREATE_OPTION", "scholarship_option", result["id"], f"新增選項「{result['name']}」")
@@ -71,7 +71,7 @@ def create_option(
 
 @router.put("/options/{option_id}", response_model=OptionOut)
 def update_option(
-    option_id: int, body: OptionCreate, db: Session = Depends(get_db), current: User = Depends(require_roles("ADMIN"))
+    option_id: int, body: OptionCreate, db: Session = Depends(get_db), current: User = Depends(require_roles("SPONSOR", "ADMIN"))
 ):
     result = service.update_option(db, option_id, body)
     aas_service.write_audit(db, current.user_id, "UPDATE_OPTION", "scholarship_option", option_id, f"修改選項 #{option_id}")
@@ -79,7 +79,7 @@ def update_option(
 
 @router.delete("/options/{option_id}")
 def delete_option(
-    option_id: int, db: Session = Depends(get_db), current: User = Depends(require_roles("ADMIN"))
+    option_id: int, db: Session = Depends(get_db), current: User = Depends(require_roles("SPONSOR", "ADMIN"))
 ):
     service.delete_option(db, option_id)
     aas_service.write_audit(db, current.user_id, "DELETE_OPTION", "scholarship_option", option_id, f"刪除選項 #{option_id}")

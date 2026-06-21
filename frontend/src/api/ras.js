@@ -69,7 +69,17 @@ function normalizeReviewApplication(item = {}) {
       },
       statement: item.form?.statement ?? item.statement ?? '-',
     },
-    documents: Array.isArray(item.documents) ? item.documents : [],
+    documents: Array.isArray(item.documents)
+      ? item.documents.map((doc) =>
+          typeof doc === 'string'
+            ? { title: doc, documentType: null, contentText: '' }
+            : {
+                title: doc.title ?? doc.document_type ?? '附件',
+                documentType: doc.documentType ?? doc.document_type ?? null,
+                contentText: doc.contentText ?? doc.content_text ?? '',
+              },
+        )
+      : [],
     recommendations,
     auditLogs,
   }

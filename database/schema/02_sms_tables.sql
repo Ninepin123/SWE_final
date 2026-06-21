@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS scholarships (
     amount           INT NOT NULL DEFAULT 0,
     quota            INT NOT NULL DEFAULT 1,
     min_gpa          DECIMAL(3,2) NULL,                 -- 申請門檻（NUKSAMS006）
-    department_limit VARCHAR(100) NULL,                 -- 科系限制（NULL = 不限）
+    department_limit TEXT NULL,                         -- 科系限制（NULL = 不限；以 JSON 陣列儲存科系名稱）
     category         ENUM('SCHOOL','GOVERNMENT','PRIVATE','LOW_INCOME','MERIT','OTHER')
                         NOT NULL DEFAULT 'OTHER',
     description      TEXT,
@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS scholarships (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 相容舊版(v1)資料表：新增申請條件、標籤、文件等欄位
+-- 科系限制原為 VARCHAR(100)，改用 JSON 陣列（可複選科系）後可能超過 100 字，放寬為 TEXT。
+SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='scholarships' AND column_name='department_limit' AND data_type='varchar');
+SET @s := IF(@c=1, 'ALTER TABLE scholarships MODIFY COLUMN department_limit TEXT NULL', 'SELECT 1');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 SET @c := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='scholarships' AND column_name='grade_limit');
 SET @s := IF(@c=0, 'ALTER TABLE scholarships ADD COLUMN grade_limit TEXT NULL', 'SELECT 1');
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;

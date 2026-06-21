@@ -14,6 +14,9 @@ from app.modules.aas.models import User
 from app.modules.aas.monitoring import build_metrics, metrics
 from app.modules.aas.schemas import (
     AuditLogOut,
+    DepartmentCreate,
+    DepartmentOut,
+    DepartmentUpdate,
     LoginRequest,
     MonitoringMetricsOut,
     TeacherOut,
@@ -94,6 +97,53 @@ def delete_unit(unit_id: int, db: Session = Depends(get_db), current: User = Dep
     service.delete_unit(db, unit_id)
     service.write_audit(db, current.user_id, "DELETE_UNIT", "unit", unit_id, f"刪除單位 #{unit_id}")
     return {"detail": "已刪除單位"}
+
+
+@router.get("/departments", response_model=list[DepartmentOut])
+def list_departments(
+    keyword: str | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """科系／部門清單（任何登入者皆可讀，供帳號/獎學金的科系下拉使用）。"""
+    return service.list_departments(db, keyword=keyword)
+
+
+@router.post("/departments", response_model=DepartmentOut, status_code=status.HTTP_201_CREATED)
+def create_department(
+    body: DepartmentCreate, db: Session = Depends(get_db), current: User = Depends(require_roles("ADMIN"))
+):
+    department = service.create_department(db, body)
+    service.write_audit(
+        db, current.user_id, "CREATE_DEPARTMENT", "department", department.department_id,
+        f"新增科系／部門「{department.name}」",
+    )
+    return department
+
+
+@router.put("/departments/{department_id}", response_model=DepartmentOut)
+def update_department(
+    department_id: int, body: DepartmentUpdate, db: Session = Depends(get_db),
+    current: User = Depends(require_roles("ADMIN")),
+):
+    department = service.update_department(db, department_id, body)
+    service.write_audit(
+        db, current.user_id, "UPDATE_DEPARTMENT", "department", department_id,
+        f"修改科系／部門「{department.name}」",
+    )
+    return department
+
+
+@router.delete("/departments/{department_id}")
+def delete_department(
+    department_id: int, db: Session = Depends(get_db), current: User = Depends(require_roles("ADMIN"))
+):
+    service.delete_department(db, department_id)
+    service.write_audit(
+        db, current.user_id, "DELETE_DEPARTMENT", "department", department_id,
+        f"刪除科系／部門 #{department_id}",
+    )
+    return {"detail": "已刪除科系／部門"}
 
 
 @router.get("/users", response_model=list[UserOut])

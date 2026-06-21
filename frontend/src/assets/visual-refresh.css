@@ -249,7 +249,12 @@ textarea:focus {
   place-items: center;
   border-radius: 14px;
   background: var(--primary-soft);
-  font-size: 22px;
+  color: var(--primary);
+}
+
+.stat-card__icon .icon {
+  width: 22px;
+  height: 22px;
 }
 
 .stat-card__label {
@@ -275,13 +280,27 @@ textarea:focus {
 }
 
 .stat-card--warning::before { background: #c47a26; }
-.stat-card--warning .stat-card__icon { background: #fff1db; }
+.stat-card--warning .stat-card__icon {
+  background: #fff1db;
+  color: #9d641d;
+}
 .stat-card--danger::before { background: var(--danger); }
+.stat-card--danger .stat-card__icon {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
 .stat-card--success::before { background: var(--success); }
+.stat-card--success .stat-card__icon {
+  background: var(--success-soft);
+  color: var(--success);
+}
 .stat-card--blue::before,
 .stat-card--info::before { background: var(--info); }
 .stat-card--blue .stat-card__icon,
-.stat-card--info .stat-card__icon { background: var(--info-soft); }
+.stat-card--info .stat-card__icon {
+  background: var(--info-soft);
+  color: var(--info);
+}
 
 .dashboard-two-column {
   display: grid;

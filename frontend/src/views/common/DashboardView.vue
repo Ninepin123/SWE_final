@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import BaseCard from '@/components/common/BaseCard.vue'
+import Icon from '@/components/common/Icon.vue'
 import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { listUsers } from '@/api/aas'
@@ -18,52 +19,52 @@ const loadError = ref('')
 const stats = computed(() => {
   if (auth.role === 'STUDENT') {
     return [
-      { label: '我的申請', value: summary.value.applications ?? 0, tone: 'info', icon: '📄', hint: '已建立的申請紀錄' },
-      { label: '審查中', value: summary.value.underReview ?? 0, tone: 'blue', icon: '🔎', hint: '正在等待審核' },
-      { label: '需補件', value: summary.value.needsSupplement ?? 0, tone: 'warning', icon: '⚠️', hint: '請優先處理' },
+      { label: '我的申請', value: summary.value.applications ?? 0, tone: 'info', icon: 'application', hint: '已建立的申請紀錄' },
+      { label: '審查中', value: summary.value.underReview ?? 0, tone: 'blue', icon: 'search', hint: '正在等待審核' },
+      { label: '需補件', value: summary.value.needsSupplement ?? 0, tone: 'warning', icon: 'alert', hint: '請優先處理' },
       {
         label: '可申請',
         value: summary.value.availableScholarships ?? 0,
         tone: 'success',
-        icon: '🎓',
+        icon: 'graduation',
         hint:
           (summary.value.availableDrafts ?? 0) > 0
             ? `符合資格可申請（含 ${summary.value.availableDrafts} 件草稿待完成）`
             : '符合資格可申請',
       },
-      { label: '未讀通知', value: summary.value.unread ?? 0, tone: 'info', icon: '🔔', hint: '最新訊息' },
+      { label: '未讀通知', value: summary.value.unread ?? 0, tone: 'info', icon: 'bell', hint: '最新訊息' },
     ]
   }
 
   if (auth.role === 'REVIEWER') {
     return [
-      { label: '待處理', value: summary.value.pending ?? 0, tone: 'warning', icon: '📥', hint: '等待審查案件' },
-      { label: '已通過', value: summary.value.approved ?? 0, tone: 'success', icon: '✅', hint: '已核定案件' },
-      { label: '未通過', value: summary.value.rejected ?? 0, tone: 'danger', icon: '⛔', hint: '已退回案件' },
-      { label: '未讀通知', value: summary.value.unread ?? 0, tone: 'info', icon: '🔔', hint: '最新訊息' },
+      { label: '待處理', value: summary.value.pending ?? 0, tone: 'warning', icon: 'inbox', hint: '等待審查案件' },
+      { label: '已通過', value: summary.value.approved ?? 0, tone: 'success', icon: 'check', hint: '已核定案件' },
+      { label: '未通過', value: summary.value.rejected ?? 0, tone: 'danger', icon: 'ban', hint: '已退回案件' },
+      { label: '未讀通知', value: summary.value.unread ?? 0, tone: 'info', icon: 'bell', hint: '最新訊息' },
     ]
   }
 
   if (auth.role === 'ADMIN') {
     return [
-      { label: '帳號數', value: summary.value.users ?? 0, tone: 'info', icon: '👥', hint: '平台使用者' },
-      { label: '獎學金', value: summary.value.scholarships ?? 0, tone: 'success', icon: '🏛️', hint: '總項目數' },
-      { label: '開放中', value: summary.value.openScholarships ?? 0, tone: 'blue', icon: '📣', hint: '目前開放申請' },
+      { label: '帳號數', value: summary.value.users ?? 0, tone: 'info', icon: 'admin', hint: '平台使用者' },
+      { label: '獎學金', value: summary.value.scholarships ?? 0, tone: 'success', icon: 'scholarship', hint: '總項目數' },
+      { label: '開放中', value: summary.value.openScholarships ?? 0, tone: 'blue', icon: 'send', hint: '目前開放申請' },
     ]
   }
 
   if (auth.role === 'SPONSOR') {
     return [
-      { label: '獎學金', value: summary.value.scholarships ?? 0, tone: 'success', icon: '🏛️', hint: '所屬單位項目' },
-      { label: '開放中', value: summary.value.openScholarships ?? 0, tone: 'blue', icon: '📣', hint: '目前公開中' },
-      { label: '未讀通知', value: summary.value.unread ?? 0, tone: 'warning', icon: '🔔', hint: '待確認訊息' },
+      { label: '獎學金', value: summary.value.scholarships ?? 0, tone: 'success', icon: 'scholarship', hint: '所屬單位項目' },
+      { label: '開放中', value: summary.value.openScholarships ?? 0, tone: 'blue', icon: 'send', hint: '目前公開中' },
+      { label: '未讀通知', value: summary.value.unread ?? 0, tone: 'warning', icon: 'bell', hint: '待確認訊息' },
     ]
   }
 
   return [
-    { label: '待填推薦信', value: summary.value.pendingRecommendations ?? 0, tone: 'warning', icon: '✍️', hint: '需要處理' },
-    { label: '已送出推薦', value: summary.value.submittedRecommendations ?? 0, tone: 'success', icon: '✅', hint: '完成推薦' },
-    { label: '未讀通知', value: summary.value.unread ?? 0, tone: 'info', icon: '🔔', hint: '最新訊息' },
+    { label: '待填推薦信', value: summary.value.pendingRecommendations ?? 0, tone: 'warning', icon: 'edit', hint: '需要處理' },
+    { label: '已送出推薦', value: summary.value.submittedRecommendations ?? 0, tone: 'success', icon: 'check', hint: '完成推薦' },
+    { label: '未讀通知', value: summary.value.unread ?? 0, tone: 'info', icon: 'bell', hint: '最新訊息' },
   ]
 })
 
@@ -278,7 +279,9 @@ onMounted(loadDashboard)
         :class="`stat-card--${stat.tone}`"
       >
         <div class="stat-card__top">
-          <span class="stat-card__icon">{{ stat.icon }}</span>
+          <span class="stat-card__icon">
+            <Icon :name="stat.icon" />
+          </span>
           <span class="stat-card__label">{{ stat.label }}</span>
         </div>
         <strong>{{ stat.value }}</strong>

@@ -13,7 +13,7 @@ import {
   updateScholarship,
   getOptions,
 } from '@/api/sms'
-import { listUnits, UNIT_TYPE_LABELS } from '@/api/aas'
+import { listDepartments, listUnits, UNIT_TYPE_LABELS } from '@/api/aas'
 import { useToastStore } from '@/stores/toast'
 import { useAuthStore } from '@/stores/auth'
 
@@ -26,6 +26,28 @@ const showModal = ref(false)
 const editingId = ref(null)
 const optionsList = ref([])
 const units = ref([])
+const departmentList = ref([])
+
+const UNLIMITED_DEPARTMENTS = ['不限', '不限科系', 'ALL']
+
+// 適用科系只列出學術科系（category=ACADEMIC）；行政部門（如教務處）不得作為獎學金的適用科系。
+// 下拉清單以目前科系列表為主；若獎學金已存有不在清單中的舊科系名稱，
+// 仍補進選項保持勾選，避免儲存時被誤刪（但行政部門名稱不補回）。
+const departmentOptions = computed(() => {
+  const academic = departmentList.value.filter((dept) => dept.category === 'ACADEMIC')
+  const adminNames = new Set(
+    departmentList.value.filter((dept) => dept.category !== 'ACADEMIC').map((dept) => dept.name),
+  )
+  const known = academic.map((dept) => dept.name)
+  const extras = form.departments
+    .filter((name) => !known.includes(name) && !adminNames.has(name))
+    .map((name) => ({ department_id: `extra-${name}`, name, college: null }))
+  return [...academic, ...extras]
+})
+
+function toggleNoDepartmentLimit() {
+  form.departments = []
+}
 
 const categories = computed(() => optionsList.value.filter(o => o.type === 'CATEGORY'))
 const tagOptions = computed(() => optionsList.value.filter(o => o.type === 'TAG'))
@@ -48,7 +70,7 @@ const form = reactive({
   status: 'OPEN',
   description: '',
   minGpa: 0,
-  departmentsText: '不限科系',
+  departments: [],
   gradesText: '',
   identitiesText: '',
   familyStatusesText: '',
@@ -64,9 +86,14 @@ const form = reactive({
 })
 
 const filteredScholarships = computed(() => {
+  // 單位資料隔離（NUKSAMS010/041）：獎助單位人員只管理自己單位張貼的獎學金；管理員不限。
+  let base = scholarships.value
+  if (auth.user?.role !== 'ADMIN') {
+    base = base.filter((item) => item.unitId === auth.user?.unit_id)
+  }
   const query = keyword.value.trim().toLowerCase()
-  if (!query) return scholarships.value
-  return scholarships.value.filter((item) =>
+  if (!query) return base
+  return base.filter((item) =>
     [item.title, item.category, item.sponsor, item.description]
       .filter(Boolean)
       .some((field) => field.toLowerCase().includes(query)),
@@ -93,7 +120,7 @@ function resetForm() {
     status: 'OPEN',
     description: '',
     minGpa: 0,
-    departmentsText: '不限科系',
+    departments: [],
     gradesText: '',
     identitiesText: '',
     familyStatusesText: '',
@@ -128,7 +155,9 @@ function openEdit(item) {
     status: item.status,
     description: item.description,
     minGpa: item.criteria?.minGpa ?? 0,
-    departmentsText: item.criteria?.departments?.join('、') ?? '',
+    departments: (item.criteria?.departments ?? []).filter(
+      (name) => name && !UNLIMITED_DEPARTMENTS.includes(name),
+    ),
     gradesText: item.criteria?.grades?.join('、') ?? '',
     identitiesText: item.criteria?.identities?.join('、') ?? '',
     familyStatusesText: item.criteria?.familyStatuses?.join('、') ?? '',
@@ -178,7 +207,7 @@ function payload() {
     description: form.description,
     criteria: {
       minGpa: Number(form.minGpa || 0),
-      departments: toArray(form.departmentsText),
+      departments: [...form.departments],
       grades: toArray(form.gradesText),
       identities: toArray(form.identitiesText),
       familyStatuses: toArray(form.familyStatusesText),
@@ -198,11 +227,16 @@ function payload() {
 async function reload() {
   scholarships.value = await listScholarships()
   try {
-    const [opts, unitList] = await Promise.all([getOptions(), listUnits()])
+    const [opts, unitList, deptList] = await Promise.all([
+      getOptions(),
+      listUnits(),
+      listDepartments(),
+    ])
     optionsList.value = opts
     units.value = unitList
+    departmentList.value = deptList
   } catch (err) {
-    console.error('Failed to fetch options/units', err)
+    console.error('Failed to fetch options/units/departments', err)
   }
 }
 
@@ -420,10 +454,36 @@ onMounted(async () => {
             <option :value="false">不需要</option>
           </select>
         </label>
-        <label class="form-grid__wide">
-          <span>適用科系</span>
-          <input v-model="form.departmentsText" type="text" placeholder="可用頓號或換行分隔" />
-        </label>
+        <div class="form-grid__wide dept-field">
+          <span class="dept-field__label">適用科系</span>
+          <label class="dept-all">
+            <input
+              type="checkbox"
+              :checked="form.departments.length === 0"
+              @change="toggleNoDepartmentLimit"
+            />
+            <span>不限科系（所有科系皆可申請）</span>
+          </label>
+          <div v-if="departmentOptions.length" class="dept-picker">
+            <label
+              v-for="dept in departmentOptions"
+              :key="dept.department_id"
+              class="dept-option"
+            >
+              <input type="checkbox" :value="dept.name" v-model="form.departments" />
+              <span>
+                {{ dept.name }}
+                <small v-if="dept.college">（{{ dept.college }}）</small>
+              </span>
+            </label>
+          </div>
+          <p v-else class="dept-empty">
+            尚未建立任何科系，請先到「科系與部門管理」新增；未選擇即代表不限科系。
+          </p>
+          <p v-if="form.departments.length" class="dept-summary">
+            已選 {{ form.departments.length }} 個科系：{{ form.departments.join('、') }}
+          </p>
+        </div>
         <label>
           <span>適用年級</span>
           <input v-model="form.gradesText" type="text" placeholder="例如：二年級、三年級" />
@@ -460,3 +520,65 @@ onMounted(async () => {
     </template>
   </BaseModal>
 </template>
+
+<style scoped>
+.dept-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dept-field__label {
+  font-size: 0.85rem;
+  color: var(--ink-soft, #6b6256);
+}
+
+.dept-all {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.dept-all input,
+.dept-option input {
+  width: auto;
+  margin: 0;
+}
+
+.dept-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.35rem 0.75rem;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--line, #ddd5c7);
+  border-radius: 8px;
+  background: var(--paper, #fbf8f1);
+}
+
+.dept-option {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.dept-option small {
+  color: var(--ink-soft, #8a8170);
+}
+
+.dept-empty {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft, #8a8170);
+}
+
+.dept-summary {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--jade, #2f6b52);
+}
+</style>

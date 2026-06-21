@@ -139,6 +139,7 @@ class ScholarshipEligibilityOut(BaseModel):
     unit_name: str | None = None
     contact_email: str | None = None
     required_documents: list[str] = Field(default_factory=list)
+    require_recommendation: bool = False
     already_applied: bool
     can_apply: bool
     ineligibility_reasons: list[str]

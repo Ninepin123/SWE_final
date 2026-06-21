@@ -2,6 +2,28 @@
 // 對應後端 backend/app/modules/sas/router.py，路徑前綴 /api/sas
 import http from './http'
 
+const UNLIMITED_DEPARTMENTS = ['不限', '不限科系', 'ALL']
+
+// 解析後端的科系限制字串：可能是 JSON 陣列（複選結果）或舊的分隔符純文字；
+// 「不限科系」語意或空值都回傳空陣列（代表不限）。
+function parseDepartmentLimit(value) {
+  if (!value || UNLIMITED_DEPARTMENTS.includes(String(value).trim())) return []
+  const text = String(value).trim()
+  let items = null
+  if (text.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(text)
+      if (Array.isArray(parsed)) items = parsed.map((d) => String(d).trim())
+    } catch {
+      items = null
+    }
+  }
+  if (items === null) {
+    items = text.split(/[,，、;/]/).map((d) => d.trim())
+  }
+  return items.filter((d) => d && !UNLIMITED_DEPARTMENTS.includes(d))
+}
+
 export function ping() {
   return http.get('/sas/ping')
 }
@@ -24,7 +46,7 @@ export function listAvailableScholarships(studentId) {
       quota: item.quota,
       seatsLeft: item.remaining_quota,
       minGpa: item.min_gpa,
-      departmentLimit: item.department_limit,
+      departmentLimit: parseDepartmentLimit(item.department_limit).join('、'),
       category: item.category,
       description: item.description,
       deadline: item.deadline,
@@ -32,16 +54,14 @@ export function listAvailableScholarships(studentId) {
       sponsor: item.unit_name,
       contactEmail: item.contact_email,
       requiredDocs: item.required_documents,
+      requireRecommendation: item.require_recommendation ?? item.requireRecommendation ?? false,
       alreadyApplied: item.already_applied,
       canApply: item.can_apply,
       ineligibilityReasons: item.ineligibility_reasons,
       // 後端目前只提供科系限制字串，仍給齊 criteria 物件以符合前端契約，
       // 避免畫面存取 item.criteria.* 時因 undefined 而整頁渲染崩潰。
       criteria: {
-        departments:
-          item.department_limit && item.department_limit !== '不限科系'
-            ? [item.department_limit]
-            : [],
+        departments: parseDepartmentLimit(item.department_limit),
         grades: [],
         identities: [],
         familyStatuses: [],

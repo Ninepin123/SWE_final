@@ -106,8 +106,8 @@ def mk_scholarship(db_session, unit_id, *, name=None, deadline=None):
     return scholarship
 
 
-def mk_application(db_session, student_id, scholarship_id):
-    app = Application(student_id=student_id, scholarship_id=scholarship_id, status="UNDER_REVIEW")
+def mk_application(db_session, student_id, scholarship_id, *, status="UNDER_REVIEW"):
+    app = Application(student_id=student_id, scholarship_id=scholarship_id, status=status)
     db_session.add(app)
     db_session.commit()
     db_session.refresh(app)
@@ -190,6 +190,49 @@ def scenario(db_session):
         "rec_a": rec_a,
         "rec_b": rec_b,
     }
+
+
+def test_student_can_request_recommendation_for_draft_application(client, db_session, scenario):
+    scholarship = mk_scholarship(db_session, scenario["unit"].unit_id, name="草稿邀請獎學金")
+    application = mk_application(
+        db_session,
+        scenario["student"].user_id,
+        scholarship.scholarship_id,
+        status="DRAFT",
+    )
+
+    response = client.post(
+        "/api/trs/recommendations",
+        headers=auth_headers(scenario["student"]),
+        json={
+            "application_id": application.application_id,
+            "teacher_id": scenario["teacher_a"].user_id,
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["application_id"] == application.application_id
+    assert payload["teacher_id"] == scenario["teacher_a"].user_id
+    assert payload["status"] == "REQUESTED"
+
+    rec = db_session.get(Recommendation, payload["rec_id"])
+    assert rec is not None
+    assert rec.application_id == application.application_id
+
+
+def test_student_cannot_request_recommendation_after_draft_stage(client, scenario):
+    response = client.post(
+        "/api/trs/recommendations",
+        headers=auth_headers(scenario["student"]),
+        json={
+            "application_id": scenario["application"].application_id,
+            "teacher_id": scenario["teacher_a"].user_id,
+        },
+    )
+
+    assert response.status_code == 409
+    assert "草稿" in response.json()["detail"]
 
 
 def test_teacher_can_only_list_own_recommendations(client, scenario):

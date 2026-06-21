@@ -21,6 +21,15 @@ export default [
     },
   },
   {
+    path: '/admin/departments',
+    name: 'aas-departments',
+    component: () => import('@/views/aas/DepartmentManagementView.vue'),
+    meta: {
+      title: '科系與部門管理',
+      roles: ['ADMIN'],
+    },
+  },
+  {
     path: '/admin/users',
     name: 'aas-users',
     component: () => import('@/views/aas/UserManagementView.vue'),

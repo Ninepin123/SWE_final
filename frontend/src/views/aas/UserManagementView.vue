@@ -6,7 +6,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import Icon from '@/components/common/Icon.vue'
-import { createUser, deleteUser, listUnits, listUsers, ROLE_LABELS, UNIT_TYPE_LABELS, updateUser } from '@/api/aas'
+import { createUser, deleteUser, listDepartments, listUnits, listUsers, ROLE_LABELS, UNIT_TYPE_LABELS, updateUser } from '@/api/aas'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
@@ -15,6 +15,7 @@ const toast = useToastStore()
 const loading = ref(true)
 const users = ref([])
 const units = ref([])
+const departments = ref([])
 const keyword = ref('')
 const roleFilter = ref('')
 const statusFilter = ref('')
@@ -41,6 +42,16 @@ const roleOptions = computed(() =>
 const unitNameById = computed(() =>
   Object.fromEntries(units.value.map((unit) => [unit.unit_id, unit.name])),
 )
+
+// 下拉選項用科系名稱當值（user.department 為字串）。若編輯到不在清單中的舊資料，
+// 仍把目前值補進選項，避免儲存時被清空。
+const departmentOptions = computed(() => {
+  const names = departments.value.map((dept) => dept.name)
+  if (form.department && !names.includes(form.department)) {
+    return [form.department, ...names]
+  }
+  return names
+})
 
 const filteredUsers = computed(() => {
   const query = keyword.value.trim().toLowerCase()
@@ -104,14 +115,17 @@ function validate() {
     error.value = '新增帳號的初始密碼至少需要 8 個字元。'
   } else if (editingId.value && form.password && form.password.length < 8) {
     error.value = '新密碼至少需要 8 個字元。'
+  } else if (form.gpa !== '' && form.gpa !== null && (Number.isNaN(Number(form.gpa)) || Number(form.gpa) < 0 || Number(form.gpa) > 4.3)) {
+    error.value = 'GPA 須介於 0 到 4.3 之間。'
   }
   return !error.value
 }
 
 async function reload() {
-  const [userList, unitList] = await Promise.all([listUsers(), listUnits()])
+  const [userList, unitList, departmentList] = await Promise.all([listUsers(), listUnits(), listDepartments()])
   users.value = userList
   units.value = unitList
+  departments.value = departmentList
 }
 
 async function save() {
@@ -304,7 +318,12 @@ onMounted(async () => {
         </label>
         <label>
           <span>科系／部門</span>
-          <input v-model="form.department" type="text" />
+          <select v-model="form.department">
+            <option value="">未指定</option>
+            <option v-for="name in departmentOptions" :key="name" :value="name">
+              {{ name }}
+            </option>
+          </select>
         </label>
         <label>
           <span>GPA（學生）</span>

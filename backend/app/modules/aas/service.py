@@ -8,13 +8,30 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.modules.aas.models import AuditLog, Unit, User
-from app.modules.aas.schemas import UnitCreate, UnitUpdate, UserCreate, UserUpdate
+from app.modules.aas.models import AuditLog, Department, Unit, User
+from app.modules.aas.schemas import (
+    DepartmentCreate,
+    DepartmentUpdate,
+    UnitCreate,
+    UnitUpdate,
+    UserCreate,
+    UserUpdate,
+)
 from app.modules.aas.security import hash_password, verify_password
 
 VALID_ROLES = {"STUDENT", "TEACHER", "SPONSOR", "REVIEWER", "ADMIN"}
 VALID_STATUS = {"ACTIVE", "DISABLED"}
 VALID_UNIT_TYPES = {"SCHOOL", "GOVERNMENT", "PRIVATE", "OTHER"}
+VALID_DEPARTMENT_CATEGORIES = {"ACADEMIC", "ADMIN"}
+# GPA 採 4.3 等第制；資料庫欄位為 DECIMAL(3,2)（上限 9.99），
+# 超出範圍會在 commit 時觸發資料庫溢位錯誤而變成 500，故先在此攔截。
+GPA_MIN = 0.0
+GPA_MAX = 4.3
+
+
+def _validate_gpa(value: float | None) -> None:
+    if value is not None and not (GPA_MIN <= value <= GPA_MAX):
+        raise HTTPException(status_code=400, detail=f"GPA 須介於 {GPA_MIN:g} 到 {GPA_MAX:g} 之間")
 
 
 def _utcnow() -> datetime:
@@ -155,6 +172,73 @@ def delete_unit(db: Session, unit_id: int) -> None:
         raise HTTPException(status_code=409, detail="此單位已被其他資料引用，無法刪除。")
 
 
+# --- 科系與部門管理（供帳號 / 獎學金資格的科系下拉與比對） ---
+
+
+def list_departments(db: Session, keyword: str | None = None) -> list[Department]:
+    stmt = select(Department)
+    if keyword and keyword.strip():
+        pattern = f"%{keyword.strip()}%"
+        stmt = stmt.where(or_(Department.name.ilike(pattern), Department.college.ilike(pattern)))
+    return list(db.scalars(stmt.order_by(Department.name)))
+
+
+def create_department(db: Session, data: DepartmentCreate) -> Department:
+    if data.category not in VALID_DEPARTMENT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="科系類別不存在")
+    name = data.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="科系／部門名稱為必填")
+    if db.scalar(select(Department).where(Department.name == name)):
+        raise HTTPException(status_code=409, detail="科系／部門名稱已存在")
+    college = data.college.strip() if data.college else None
+    department = Department(name=name, college=college or None, category=data.category)
+    db.add(department)
+    db.commit()
+    db.refresh(department)
+    return department
+
+
+def update_department(db: Session, department_id: int, data: DepartmentUpdate) -> Department:
+    department = db.get(Department, department_id)
+    if department is None:
+        raise HTTPException(status_code=404, detail="找不到科系／部門")
+    payload = data.model_dump(exclude_unset=True)
+    if "category" in payload and payload["category"] not in VALID_DEPARTMENT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="科系類別不存在")
+    if "name" in payload and payload["name"] is not None:
+        payload["name"] = payload["name"].strip()
+        if not payload["name"]:
+            raise HTTPException(status_code=400, detail="科系／部門名稱為必填")
+        if db.scalar(
+            select(Department).where(
+                Department.name == payload["name"], Department.department_id != department_id
+            )
+        ):
+            raise HTTPException(status_code=409, detail="科系／部門名稱已存在")
+    if "college" in payload:
+        payload["college"] = (payload["college"].strip() or None) if payload["college"] else None
+    for key, value in payload.items():
+        setattr(department, key, value)
+    db.commit()
+    db.refresh(department)
+    return department
+
+
+def delete_department(db: Session, department_id: int) -> None:
+    department = db.get(Department, department_id)
+    if department is None:
+        raise HTTPException(status_code=404, detail="找不到科系／部門")
+    # User.department 是自由文字，這裡以名稱比對提醒尚有帳號使用，避免造成孤兒資料。
+    bound_users = db.scalar(
+        select(func.count(User.user_id)).where(User.department == department.name)
+    ) or 0
+    if bound_users:
+        raise HTTPException(status_code=409, detail="仍有帳號使用此科系／部門，請先調整帳號的科系再刪除。")
+    db.delete(department)
+    db.commit()
+
+
 def list_users(
     db: Session,
     keyword: str | None = None,
@@ -197,6 +281,7 @@ def create_user(db: Session, data: UserCreate) -> User:
         raise HTTPException(status_code=409, detail="帳號已存在")
     if not data.password.strip():
         raise HTTPException(status_code=400, detail="密碼不可為空")
+    _validate_gpa(data.gpa)
     user = User(
         account=data.account,
         password=hash_password(data.password),
@@ -223,6 +308,8 @@ def update_user(db: Session, user_id: int, data: UserUpdate, current_user_id: in
         raise HTTPException(status_code=400, detail="角色不存在")
     if "status" in payload and payload["status"] not in VALID_STATUS:
         raise HTTPException(status_code=400, detail="狀態不存在")
+    if "gpa" in payload:
+        _validate_gpa(payload["gpa"])
     if current_user_id == user_id and payload.get("status") == "DISABLED":
         raise HTTPException(status_code=400, detail="不能停用目前登入的管理員帳號")
     if "password" in payload:
